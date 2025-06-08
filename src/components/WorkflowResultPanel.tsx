@@ -52,7 +52,7 @@ const stepConfig = {
   1: { title: "Context Analysis", icon: "📋", color: "purple" },
   2: { title: "Conversion Result", icon: "⚙️", color: "orange" },
   3: { title: "Validation Report", icon: "", color: "green" },
-  4: { title: "Deployment Status", icon: "🚀", color: "red" }
+  4: { title: "Deployment Status", icon: "", color: "red" }
 };
 
 export default function WorkflowResultPanel({
@@ -76,7 +76,7 @@ export default function WorkflowResultPanel({
           display += `📝 Summary: ${result.classification.summary}\n`;
           display += ` Convertible: ${result.classification.convertible ? 'Yes' : 'No'}\n`;
           display += `👨‍💻 Manual Estimate: ${(result.classification.manual_estimate_ms / 1000 / 60).toFixed(1)} minutes\n`;
-          display += `🚀 Speedup: ${result.classification.speedup.toFixed(1)}x faster\n`;
+          display += ` Speedup: ${result.classification.speedup.toFixed(1)}x faster\n`;
         }
         break;
       case 1:

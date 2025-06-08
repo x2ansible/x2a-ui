@@ -84,7 +84,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
   const handleQuery = async () => {
     if (!code.trim()) {
       setError("No Infrastructure as Code to analyze");
-      logMessage(" Error: No code to analyze");
+      logMessage("⚠️ Error: No code to analyze");
       return;
     }
     setLoading(true);
@@ -94,56 +94,118 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
 
     const startTime = Date.now();
     try {
-      logMessage("🚀 Sending context query to backend...");
-      const resp = await fetch("/api/context/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: code, top_k: 5 }),
-      });
-      logMessage(`📥 Response: HTTP ${resp.status}`);
+      // Use the streaming endpoint
+      const apiUrl = process.env.NEXT_PUBLIC_CONTEXT_QUERY_API || "http://localhost:8000/api/context/query/stream";
+      
+      logMessage(`🔗 Connecting to: ${apiUrl}`);
+      logMessage("📤 Sending context query to backend...");
 
-      let data: any = null;
-      try {
-        const contentType = resp.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          data = await resp.json();
-        } else {
-          const raw = await resp.text();
-          throw new Error(`Backend did not return JSON: ${raw.slice(0, 200)}`);
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream", // Important for streaming
+        },
+        body: JSON.stringify({ 
+          code: code,
+          top_k: 5 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      logMessage("📡 Receiving streaming response...");
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body reader available");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalResult: any = null;
+      let contextItems: ContextItem[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
         }
-      } catch (e) {
-        setError("Context API did not return valid JSON. Try again.");
-        setLoading(false);
-        logMessage(` Context discovery failed: ${e}`);
-        return;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.trim() === "") continue;
+          
+          // Parse Server-Sent Events format
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonStr = line.slice(6); // Remove 'data: ' prefix
+              const eventData = JSON.parse(jsonStr);
+              
+              logMessage(`📊 ${eventData.message || eventData.msg || 'Processing...'}`);
+              
+              // Look for context results - match the actual backend format
+              if (eventData.event === 'result') {
+                console.log("🎯 Found context result:", eventData);
+                finalResult = eventData;
+                if (eventData.context && Array.isArray(eventData.context)) {
+                  contextItems = eventData.context;
+                  logMessage(`📄 Found ${contextItems.length} context pattern(s)`);
+                  contextItems.forEach((item, i) => {
+                    logMessage(`📄 Pattern ${i + 1}: ${item.text.slice(0, 100)}...`);
+                  });
+                }
+              } else if (eventData.event === 'progress') {
+                logMessage(`📊 ${eventData.msg || 'Processing...'}`);
+              } else if (eventData.event === 'start') {
+                logMessage(` ${eventData.msg || 'Context search started'}`);
+              }
+            } catch (parseError) {
+              console.warn("Failed to parse event data:", line, parseError);
+            }
+          }
+        }
       }
 
       const duration = Date.now() - startTime;
-      if (!resp.ok) {
-        throw new Error(data?.detail || `HTTP ${resp.status}`);
+
+      // If we got context items during streaming, use them
+      if (contextItems.length > 0) {
+        finalResult = {
+          success: true,
+          context: contextItems
+        };
       }
 
-      let contextArray: ContextItem[] = [];
-      if (Array.isArray(data.context)) {
-        contextArray = data.context;
-      } else if (typeof data.context === "string") {
-        contextArray = [{ text: data.context }];
-      } else {
-        contextArray = [];
+      if (!finalResult || !finalResult.context) {
+        throw new Error("No context patterns found in the knowledge base");
       }
 
-      setResult({ ...data, context: contextArray });
+      logMessage(` Context retrieved in ${duration}ms (${contextItems.length} patterns)`);
+
+      setResult({
+        success: true,
+        context: contextItems
+      });
       setError(null);
-      setLoading(false);
 
-      logMessage(` Context retrieved in ${duration}ms (${contextArray.length} patterns)`);
-      if (contextArray.length && onContextRetrieved) {
-        onContextRetrieved(contextArray.map((c) => c.text).join("\n\n"));
+      if (contextItems.length && onContextRetrieved) {
+        onContextRetrieved(contextItems.map((c) => c.text).join("\n\n"));
       }
     } catch (err: any) {
-      setError(err?.message || "Unknown error in context discovery.");
+      const duration = Date.now() - startTime;
+      const errorMessage = err?.message || "Unknown error in context discovery";
+      setError(errorMessage);
+      logMessage(`❌ Context discovery failed after ${duration}ms: ${errorMessage}`);
+    } finally {
       setLoading(false);
-      logMessage(` Context discovery failed: ${err}`);
     }
   };
 

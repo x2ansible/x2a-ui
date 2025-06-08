@@ -14,7 +14,7 @@ const steps = [
   { index: 1, name: "Context", icon: "📋" },
   { index: 2, name: "Convert", icon: "⚙️" },
   { index: 3, name: "Validate", icon: "" },
-  { index: 4, name: "Deploy", icon: "🚀" }
+  { index: 4, name: "Deploy", icon: "" }
 ];
 
 export default function WorkflowNavigation({

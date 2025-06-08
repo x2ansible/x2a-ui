@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Configuration
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://host.containers.internal:8000";
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 const REQUEST_TIMEOUT = 65000; // 65 seconds (slightly more than backend timeout)
 const MAX_RETRIES = 2;
 const VALID_PROFILES = ["basic", "production", "safety", "test", "minimal"];
@@ -76,7 +76,7 @@ async function makeBackendRequest(url: string, body: ValidateRequestBody, reques
   }, REQUEST_TIMEOUT);
 
   try {
-    console.log(`🚀 [${requestId}] Attempt ${attempt}: Sending request to ${url}`);
+    console.log(` [${requestId}] Attempt ${attempt}: Sending request to ${url}`);
     console.log(`📊 [${requestId}] Request body:`, {
       playbook_length: body.playbook.length,
       lint_profile: body.lint_profile,
@@ -114,7 +114,7 @@ async function makeBackendRequest(url: string, body: ValidateRequestBody, reques
       throw new Error(`Request timed out after ${REQUEST_TIMEOUT / 1000} seconds`);
     }
     
-    console.error(`💥 [${requestId}] Network error (attempt ${attempt}):`, error);
+    console.error(` [${requestId}] Network error (attempt ${attempt}):`, error);
     throw error;
   }
 }
@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
   const startTime = Date.now();
   
-  console.log(`🚀 [${requestId}] Validation request started`);
+  console.log(` [${requestId}] Validation request started`);
   console.log(`🌐 [${requestId}] Backend URL: ${BACKEND_URL}`);
   console.log(`📋 [${requestId}] Request headers:`, {
     'content-type': request.headers.get('content-type'),
@@ -296,7 +296,7 @@ export async function POST(request: NextRequest) {
 
         // If this was the last attempt, break
         if (attempt > MAX_RETRIES) {
-          console.error(`💥 [${requestId}] All ${MAX_RETRIES + 1} attempts failed`);
+          console.error(` [${requestId}] All ${MAX_RETRIES + 1} attempts failed`);
           break;
         }
 
@@ -309,7 +309,7 @@ export async function POST(request: NextRequest) {
     const errorMessage = lastError?.message || 'Unknown error occurred';
     const errorStatus = (lastError as any)?.status || 500;
     
-    console.error(`💥 [${requestId}] Request failed after ${totalTime}ms:`, errorMessage);
+    console.error(` [${requestId}] Request failed after ${totalTime}ms:`, errorMessage);
 
     return NextResponse.json(
       {
@@ -335,7 +335,7 @@ export async function POST(request: NextRequest) {
     const totalTime = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    console.error(`💥 [${requestId}] Unexpected error after ${totalTime}ms:`, error);
+    console.error(` [${requestId}] Unexpected error after ${totalTime}ms:`, error);
 
     return NextResponse.json(
       {
@@ -411,7 +411,7 @@ export async function GET() {
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`💥 [${requestId}] Health check failed:`, error);
+    console.error(` [${requestId}] Health check failed:`, error);
     
     return NextResponse.json({
       status: 'unhealthy',

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://host.containers.internal:8000";
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   try {
-    console.log(`🚀 Proxying git clone to: ${BACKEND_URL}/api/files/clone`);
+    console.log(` Proxying git clone to: ${BACKEND_URL}/api/files/clone`);
     
     const body = await request.json();
     
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("💥 Git clone proxy error:", error);
+    console.error(" Git clone proxy error:", error);
     return NextResponse.json(
       { error: "Failed to clone repository", detail: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }

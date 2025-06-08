@@ -36,7 +36,7 @@ const stepConfig = {
   },
   4: { 
     action: "Deploy", 
-    icon: "🚀", 
+    icon: "", 
     description: "Deploy validated code to target environment",
     requiresCode: false
   }

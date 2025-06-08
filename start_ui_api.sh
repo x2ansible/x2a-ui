@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting X2Ansible Application..."
+echo " Starting X2Ansible Application..."
 
 # Function to check if a service is running
 check_service() {

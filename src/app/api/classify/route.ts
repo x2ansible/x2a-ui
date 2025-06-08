@@ -1,55 +1,66 @@
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/chef/analyze/stream/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://host.containers.internal:8000";
+const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const code = body.code;
-
-  if (!code || typeof code !== "string" || !code.trim()) {
-    return NextResponse.json({ error: "Code snippet is required" }, { status: 400 });
-  }
-
+export async function POST(request: NextRequest) {
   try {
-    console.log(`🚀 Making classification request to: ${BACKEND_URL}/api/classify`);
+    console.log('🔄 Proxying chef analysis request to backend...');
     
-    const response = await fetch(`${BACKEND_URL}/api/classify`, {
+    const body = await request.json();
+    console.log('📝 Analysis request body:', {
+      codeLength: body.code?.length || 0,
+      hasCode: !!body.code
+    });
+    
+    // Validate the request
+    if (!body.code || typeof body.code !== 'string') {
+      console.error('❌ Invalid request: missing or invalid code field');
+      return NextResponse.json(
+        { error: 'Missing or invalid code field' }, 
+        { status: 400 }
+      );
+    }
+
+    console.log(` Making request to: ${BACKEND_URL}/api/chef/analyze`);
+    
+    // Forward the request to your FastAPI backend
+    const response = await fetch(`${BACKEND_URL}/api/chef/analyze`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
+      headers: { 
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     });
 
     console.log(`📥 Backend response status: ${response.status}`);
-
-    const result = await response.json();
-
+    
     if (!response.ok) {
-      console.error(" Classifier backend error:", result);
+      const errorText = await response.text();
+      console.error('❌ Backend error:', errorText);
+      
+      // Try to parse error as JSON if possible
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText };
+      }
+      
       return NextResponse.json(
-        { error: result?.detail || "Backend error" },
+        errorData,
         { status: response.status }
       );
     }
 
-    // Handle direct classification response (no wrapper)
-  if (result.classification) {
-    return NextResponse.json(result, { status: 200 });
-  }
-  
-  // Handle wrapped response format
-  if (result.success && result.data) {
-    return NextResponse.json(result.data, { status: 200 });
-  }
-
-    console.error(" Invalid classifier result structure:", result);
+    const data = await response.json();
+    console.log(' Successfully got analysis result from backend');
+    
+    return NextResponse.json(data);
+  } catch (error: any) {
+    console.error('❌ Chef analysis proxy error:', error);
     return NextResponse.json(
-      { error: result.error || "Invalid classifier response" },
-      { status: 500 }
-    );
-  } catch (err: any) {
-    console.error(" Exception while calling classifier backend:", err);
-    return NextResponse.json(
-      { error: "Classification failed due to internal error." },
+      { error: `Analysis failed: ${error.message}` },
       { status: 500 }
     );
   }

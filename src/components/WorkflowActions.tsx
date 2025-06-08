@@ -38,7 +38,7 @@ const stepActions = {
   },
   4: { 
     action: "Deploy", 
-    icon: "🚀", 
+    icon: "", 
     description: "Deploy to target environment",
     canProceed: (result: any) => result?.deployment?.status === 'success'
   }

@@ -5,7 +5,7 @@ metadata:
 data:
   config.yaml: |
     llama_stack:
-      base_url: "http://host.containers.internal:8321"
+      base_url: "http://localhost:8321"
       model: "llama3.2:3b"
     vector_db:
       id: "iac"

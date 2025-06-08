@@ -1,0 +1,77 @@
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: x2ansible-frontend-config
+  namespace: your-namespace
+data:
+  # OpenShift-specific URLs (update these with your actual OpenShift routes)
+  NEXT_PUBLIC_BACKEND_URL: "https://your-backend-route.apps.your-cluster.com"
+  NEXT_PUBLIC_FRONTEND_URL: "https://your-frontend-route.apps.your-cluster.com"
+  
+  # API endpoints (will automatically use the backend URL)
+  NEXT_PUBLIC_CLASSIFY_API: "https://your-backend-route.apps.your-cluster.com/api/chef/analyze/stream"
+  NEXT_PUBLIC_CONTEXT_API: "https://your-backend-route.apps.your-cluster.com/api/context/query/stream"
+  NEXT_PUBLIC_GENERATE_API: "https://your-backend-route.apps.your-cluster.com/api/generate/playbook/stream"
+  NEXT_PUBLIC_VALIDATE_API: "https://your-backend-route.apps.your-cluster.com/api/validate/playbook/stream"
+  NEXT_PUBLIC_FILE_UPLOAD_API: "https://your-backend-route.apps.your-cluster.com/api/files/upload"
+  NEXT_PUBLIC_FILE_LIST_API: "https://your-backend-route.apps.your-cluster.com/api/files/list"
+  NEXT_PUBLIC_GIT_CLONE_API: "https://your-backend-route.apps.your-cluster.com/api/files/clone"
+  NEXT_PUBLIC_VECTOR_DB_LIST_API: "https://your-backend-route.apps.your-cluster.com/api/vector-db/list"
+  NEXT_PUBLIC_CONTEXT_QUERY_API: "https://your-backend-route.apps.your-cluster.com/api/context/query/stream"
+  NEXT_PUBLIC_CONTEXT_INGEST_API: "https://your-backend-route.apps.your-cluster.com/api/context/ingest"
+  
+  # GitHub OAuth settings
+  GITHUB_ORG: "x2ansible"
+  GITHUB_TEAM: "x2ansible-users"
+
+---
+# openshift-env-secret.yaml  
+apiVersion: v1
+kind: Secret
+metadata:
+  name: x2ansible-frontend-secrets
+  namespace: your-namespace
+type: Opaque
+stringData:
+  # GitHub OAuth credentials (base64 encode these values)
+  GITHUB_CLIENT_ID: "Ov23li9suv3cJIMn4GKa"
+  GITHUB_CLIENT_SECRET: "bd16c60466cca4d3a4058ef7c67adbea3f254fb1"
+  
+  # NextAuth secret (generate a new one for production)
+  NEXTAUTH_SECRET: "your-production-secret-32-chars-long"
+  
+  # This will be set based on your OpenShift route
+  NEXTAUTH_URL: "https://your-frontend-route.apps.your-cluster.com"
+
+---
+# Example Deployment that uses these configs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: x2ansible-frontend
+  namespace: your-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: x2ansible-frontend
+  template:
+    metadata:
+      labels:
+        app: x2ansible-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: your-registry/x2ansible-frontend:latest
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: x2ansible-frontend-config
+        - secretRef:
+            name: x2ansible-frontend-secrets
+        env:
+        # Override NEXTAUTH_URL with the actual route (can be set via OpenShift route)
+        - name: NEXTAUTH_URL
+          value: "https://$(hostname)/auth" # This gets auto-populated by OpenShift

@@ -1,46 +1,36 @@
 import type { NextConfig } from "next";
-import fs from "fs";
-import yaml from "js-yaml";
 
-// Load config.yaml if it exists
-let cfg: any = { agent_endpoints: {}, file_endpoints: {} };
+// Get backend URL from environment variables
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-try {
-  if (fs.existsSync("./config.yaml")) {
-    const raw = fs.readFileSync("./config.yaml", "utf8");
-    cfg = yaml.load(raw) || cfg;
-  } else {
-    console.warn("[next.config.ts] config.yaml not found, using defaults.");
-  }
-} catch (e) {
-  console.error("[next.config.ts] Failed to load config.yaml:", e);
-}
+console.log(`[next.config.ts] Backend URL: ${backendUrl}`);
+console.log(`[next.config.ts] Environment: ${process.env.NODE_ENV}`);
 
 const nextConfig: NextConfig = {
-  // NO static export - use Next.js server mode
-  // output: 'export',  // <-- REMOVE THIS
-  
-  // Keep images optimized (since we have a server)
+  // Use Next.js server mode for full functionality
   images: {
-    unoptimized: false
+    unoptimized: false,
+    domains: ['localhost', '127.0.0.1'], // Add your OpenShift domain here when deploying
   },
   
-  // Environment variables
-  env: {
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000',
-  },
+  // Environment variables are automatically loaded from .env.local
+  // No need to explicitly define them here since they're already NEXT_PUBLIC_*
   
   // API rewrites to your backend
   async rewrites() {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    console.log(`[next.config.ts] Setting up API rewrites to: ${backendUrl}`);
+    
     return [
+      // File operations
       {
         source: '/api/files/:path*',
         destination: `${backendUrl}/api/files/:path*`,
       },
+      
+      // Agent endpoints
       {
-        source: '/api/classify/:path*',
-        destination: `${backendUrl}/api/classify/:path*`,
+        source: '/api/chef/:path*',
+        destination: `${backendUrl}/api/chef/:path*`,
       },
       {
         source: '/api/validate/:path*',
@@ -54,23 +44,25 @@ const nextConfig: NextConfig = {
         source: '/api/generate/:path*',
         destination: `${backendUrl}/api/generate/:path*`,
       },
+      {
+        source: '/api/admin/:path*',
+        destination: `${backendUrl}/api/admin/:path*`,
+      },
+      {
+        source: '/api/vector-db/:path*',
+        destination: `${backendUrl}/api/vector-db/:path*`,
+      },
+      
       // Keep /api/auth/* for NextAuth - don't proxy these
     ];
   },
   
   // Build configuration
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: process.env.NODE_ENV === 'development',
   },
   eslint: {
-    ignoreDuringBuilds: true,
-  },
-  
-  // Runtime configuration
-  publicRuntimeConfig: {
-    agentEndpoints: cfg.agent_endpoints,
-    fileEndpoints: cfg.file_endpoints,
-    backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000',
+    ignoreDuringBuilds: process.env.NODE_ENV === 'development',
   },
 };
 

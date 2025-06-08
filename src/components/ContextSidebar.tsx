@@ -42,11 +42,17 @@ export default function ContextSidebar({
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/vector-dbs");
+        // Use the correct endpoint with environment variable
+        const apiUrl = process.env.NEXT_PUBLIC_VECTOR_DB_LIST_API || "/api/vector-db/list";
+        console.log("🔗 Fetching vector DBs from:", apiUrl);
+        
+        const response = await fetch(apiUrl);
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         const data = await response.json();
+        console.log("📊 Vector DBs received:", data);
+        
         setVectorDbs(Array.isArray(data) ? data : []);
         
         const currentDb = Array.isArray(data) 
@@ -57,6 +63,7 @@ export default function ContextSidebar({
             ) 
           : null;
         setCurrentVectorDb(currentDb);
+        console.log("🎯 Current DB found:", currentDb);
       } catch (err) {
         console.error("Failed to fetch vector DBs:", err);
         setError(err instanceof Error ? err.message : "Failed to fetch knowledge base");
@@ -81,7 +88,11 @@ export default function ContextSidebar({
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/context/ingest", {
+      // Use environment variable for ingest endpoint
+      const ingestUrl = process.env.NEXT_PUBLIC_CONTEXT_INGEST_API || "/api/context/ingest";
+      console.log("📤 Uploading to:", ingestUrl);
+
+      const response = await fetch(ingestUrl, {
         method: "POST",
         body: formData,
       });
@@ -201,7 +212,7 @@ export default function ContextSidebar({
             </div>
           ) : (
             <div className="text-xs text-slate-400 text-center py-2">
-              Knowledge base not found
+              {loading ? "Loading knowledge base..." : "Knowledge base not found"}
             </div>
           )}
         </div>
@@ -345,7 +356,7 @@ export default function ContextSidebar({
             <div className="flex items-start space-x-3">
               <ExclamationTriangleIcon className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-red-300 font-medium text-sm">Upload Failed</p>
+                <p className="text-red-300 font-medium text-sm">Connection Failed</p>
                 <p className="text-red-400/80 text-xs mt-1">{error}</p>
               </div>
               <button 

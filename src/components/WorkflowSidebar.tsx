@@ -415,7 +415,7 @@ ${file.content}`)
   // Step 4: Deployment Config
   if (currentStep === 4) {
     return (
-      <SidebarWrapper title="🚀 Deployment Settings">
+      <SidebarWrapper title=" Deployment Settings">
         <div className="space-y-4">
           <div>
             <label className="block text-sm text-gray-300 mb-2">Deployment Target</label>

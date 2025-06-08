@@ -155,7 +155,7 @@ function RunWorkflowPageInner() {
 
   const handleDeployment = () => {
     setLoading(true);
-    addLogMessage("🚀 Starting deployment process...");
+    addLogMessage(" Starting deployment process...");
     setTimeout(() => {
       setLoading(false);
       markStepAsCompleted(4);

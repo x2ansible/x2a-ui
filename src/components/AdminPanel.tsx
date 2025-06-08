@@ -18,8 +18,9 @@ import {
   Download,
   RefreshCw,
   Lock,
+  Info,
 } from "lucide-react";
-import { useAdminConfig, type AgentConfig } from "../hooks/useAdminConfig";
+import { useAdminConfig, type AgentConfig, type CreateAgentRequest } from "../hooks/useAdminConfig";
 import { CreateAgentModal } from "./CreateAgentModal";
 
 // Agent metadata (icons and descriptions)
@@ -32,23 +33,11 @@ const AGENT_METADATA: Record<
     color: string;
   }
 > = {
-  classifier: {
-    name: "Classification Agent",
+  chef_analysis_chaining: {
+    name: "Chef Analysis Agent",
     icon: Brain,
-    description: "Analyzes code to determine if it's infrastructure-as-code",
-    color: "from-blue-500 to-cyan-400",
-  },
-  codegen: {
-    name: "Code Generator Agent",
-    icon: Code,
-    description: "Converts infrastructure code to Ansible playbooks",
-    color: "from-green-500 to-emerald-400",
-  },
-  validation: {
-    name: "Validation Agent",
-    icon: Shield,
-    description: "Validates Ansible playbooks using custom linting tools",
-    color: "from-orange-500 to-amber-400",
+    description: "Analyzes Chef cookbooks with prompt chaining",
+    color: "from-orange-500 to-red-400",
   },
   context: {
     name: "Context Agent",
@@ -56,11 +45,17 @@ const AGENT_METADATA: Record<
     description: "Retrieves relevant context from vector database using RAG",
     color: "from-purple-500 to-violet-400",
   },
-  spec: {
-    name: "Specification Agent",
-    icon: FileText,
-    description: "Generates technical specifications for infrastructure conversion",
-    color: "from-pink-500 to-rose-400",
+  generate: {
+    name: "Code Generator Agent",
+    icon: Code,
+    description: "Converts infrastructure code to Ansible playbooks",
+    color: "from-green-500 to-emerald-400",
+  },
+  validate: {
+    name: "Validation Agent",
+    icon: Shield,
+    description: "Validates Ansible playbooks using custom linting tools",
+    color: "from-blue-500 to-cyan-400",
   },
 };
 
@@ -68,13 +63,14 @@ type SaveStatus = "saving" | "success" | "error" | null;
 
 const AdminPanel: React.FC = () => {
   const [agents, setAgents] = useState<AgentConfig[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<boolean>(false);
   const [editedInstructions, setEditedInstructions] = useState<string>("");
   const [unsavedChanges, setUnsavedChanges] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [systemInfo, setSystemInfo] = useState<any>(null);
 
   // Use the admin config hook
   const {
@@ -82,72 +78,97 @@ const AdminPanel: React.FC = () => {
     error,
     clearError,
     getAgentConfigs,
+    getAgentConfig,
     updateAgent,
     reloadConfigs,
     exportConfig,
     createAgent,
+    refreshAgents,
+    getSystemInfo,
   } = useAdminConfig();
 
   // Load agent configurations
   useEffect(() => {
     loadAgentConfigs();
+    loadSystemInfo();
     // eslint-disable-next-line
   }, []);
 
+  // Update selected agent when agents list changes
   useEffect(() => {
-    // When agent list changes, reset selected agent if needed
     if (agents.length > 0) {
-      const defaultAgentId = selectedAgentId || agents[0].agent_id!;
-      setSelectedAgentId(defaultAgentId);
-
-      const agent = agents.find((a) => a.agent_id === defaultAgentId);
-      setEditedInstructions(agent?.agent_config.instructions || "");
-      setUnsavedChanges(false);
+      const defaultAgentName = selectedAgentName || agents[0].agent_config.name;
+      setSelectedAgentName(defaultAgentName);
     }
-  }, [agents, selectedAgentId]);
+  }, [agents, selectedAgentName]);
 
-  // Update edited instructions when selected agent changes
+  // Load agent instructions when selected agent changes
   useEffect(() => {
-    const agent = agents.find((a) => a.agent_id === selectedAgentId);
-    if (agent) {
-      setEditedInstructions(agent.agent_config.instructions || "");
-      setUnsavedChanges(false);
+    if (selectedAgentName) {
+      loadAgentInstructions(selectedAgentName);
     }
-  }, [selectedAgentId, agents]);
+  }, [selectedAgentName]);
 
   const loadAgentConfigs = async (): Promise<void> => {
     try {
       clearError();
       const agentsData = await getAgentConfigs();
       setAgents(agentsData);
-      if (!selectedAgentId && agentsData.length > 0) {
-        setSelectedAgentId(agentsData[0].agent_id!);
+      if (!selectedAgentName && agentsData.length > 0) {
+        setSelectedAgentName(agentsData[0].agent_config.name);
       }
     } catch (err) {
-      // Error is handled by the hook
+      console.error("Failed to load agent configs:", err);
+    }
+  };
+
+  const loadSystemInfo = async (): Promise<void> => {
+    try {
+      const info = await getSystemInfo();
+      setSystemInfo(info);
+    } catch (err) {
+      console.warn("Could not load system info:", err);
+    }
+  };
+
+  const loadAgentInstructions = async (agentName: string): Promise<void> => {
+    try {
+      // Try to get detailed agent config with instructions
+      const agentDetail = await getAgentConfig(agentName);
+      setEditedInstructions(agentDetail.agent_config.instructions || "");
+      setUnsavedChanges(false);
+    } catch (err) {
+      console.warn(`Could not load instructions for ${agentName}:`, err);
+      // Fallback to empty instructions
+      setEditedInstructions("");
+      setUnsavedChanges(false);
     }
   };
 
   const handleInstructionsChange = (value: string): void => {
     setEditedInstructions(value);
-    const currentAgent = agents.find((a) => a.agent_id === selectedAgentId);
+    const currentAgent = agents.find((a) => a.agent_config.name === selectedAgentName);
     setUnsavedChanges(value !== (currentAgent?.agent_config.instructions || ""));
   };
 
   const saveChanges = async (): Promise<void> => {
+    if (!selectedAgentName) return;
+    
     try {
       setSaveStatus("saving");
       setIsLocked(true);
       clearError();
 
-      const agent = agents.find((a) => a.agent_id === selectedAgentId);
-      if (!agent) throw new Error("No agent selected!");
-
-      const newConfig = {
-        ...agent.agent_config,
+      // Note: Your backend doesn't seem to have update functionality
+      // This will likely fail unless you implement update in your backend
+      const updateRequest: CreateAgentRequest = {
+        name: selectedAgentName,
+        model: "meta-llama/Llama-3.1-8B-Instruct",
         instructions: editedInstructions,
+        tools: [],
       };
-      await updateAgent(agent.agent_id!, newConfig);
+      
+      await updateAgent(selectedAgentName, updateRequest);
 
       // Refresh agent list
       await loadAgentConfigs();
@@ -156,6 +177,7 @@ const AdminPanel: React.FC = () => {
       setSaveStatus("success");
       setTimeout(() => setSaveStatus(null), 3000);
     } catch (err) {
+      console.error("Save failed:", err);
       setSaveStatus("error");
       setTimeout(() => setSaveStatus(null), 5000);
     } finally {
@@ -164,7 +186,7 @@ const AdminPanel: React.FC = () => {
   };
 
   const resetChanges = (): void => {
-    const currentAgent = agents.find((a) => a.agent_id === selectedAgentId);
+    const currentAgent = agents.find((a) => a.agent_config.name === selectedAgentName);
     setEditedInstructions(currentAgent?.agent_config.instructions || "");
     setUnsavedChanges(false);
   };
@@ -173,7 +195,7 @@ const AdminPanel: React.FC = () => {
     try {
       await navigator.clipboard.writeText(editedInstructions);
     } catch (err) {
-      // Ignore
+      console.warn("Copy failed:", err);
     }
   };
 
@@ -181,23 +203,23 @@ const AdminPanel: React.FC = () => {
     try {
       await exportConfig();
     } catch (err) {
-      // Ignore
+      console.warn("Export failed:", err);
     }
   };
 
   const reloadConfiguration = async (): Promise<void> => {
     try {
       clearError();
-      const agentsData = await reloadConfigs();
-      setAgents(agentsData);
+      await refreshAgents();
+      await loadAgentConfigs();
     } catch (err) {
-      // Ignore
+      console.error("Reload failed:", err);
     }
   };
 
   // Handle creation of new agent from modal
-  const handleCreateAgent = async (agentConfig: AgentConfig["agent_config"]) => {
-    await createAgent(agentConfig);
+  const handleCreateAgent = async (agentRequest: CreateAgentRequest) => {
+    await createAgent(agentRequest);
     await loadAgentConfigs();
   };
 
@@ -230,11 +252,10 @@ const AdminPanel: React.FC = () => {
     );
   }
 
-  const currentAgent = agents.find((a) => a.agent_id === selectedAgentId);
-  const agentMeta =
-    currentAgent?.agent_config.name && AGENT_METADATA[currentAgent.agent_config.name]
-      ? AGENT_METADATA[currentAgent.agent_config.name]
-      : {};
+  const currentAgent = agents.find((a) => a.agent_config.name === selectedAgentName);
+  const agentMeta = selectedAgentName && AGENT_METADATA[selectedAgentName]
+    ? AGENT_METADATA[selectedAgentName]
+    : {};
 
   const AgentIcon = agentMeta.icon || Brain;
 
@@ -250,9 +271,23 @@ const AdminPanel: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-white">Agent Admin</h1>
-              <p className="text-xs text-slate-400">Manage AI Agent Prompts</p>
+              <p className="text-xs text-slate-400">Manage AI Agent Configurations</p>
             </div>
           </div>
+
+          {/* System Info */}
+          {systemInfo && (
+            <div className="mb-4 p-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+              <div className="flex items-center gap-2 mb-2">
+                <Info size={14} className="text-blue-400" />
+                <span className="text-xs font-medium text-slate-300">System Status</span>
+              </div>
+              <div className="text-xs text-slate-400 space-y-1">
+                <div>Registered: {systemInfo.registered_agents || 0} agents</div>
+                <div>LlamaStack: {systemInfo.llamastack_url ? "Connected" : "Unknown"}</div>
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-2 mb-2">
@@ -285,16 +320,15 @@ const AdminPanel: React.FC = () => {
         {/* Agent List */}
         <div className="flex-1 p-4 space-y-2 overflow-y-auto">
           {agents.map((agent) => {
-            const meta =
-              agent.agent_config.name && AGENT_METADATA[agent.agent_config.name]
-                ? AGENT_METADATA[agent.agent_config.name]
-                : {};
+            const agentName = agent.agent_config.name;
+            const meta = agentName && AGENT_METADATA[agentName] ? AGENT_METADATA[agentName] : {};
             const IconComponent = meta.icon || Brain;
-            const isSelected = selectedAgentId === agent.agent_id;
+            const isSelected = selectedAgentName === agentName;
+            
             return (
               <button
-                key={agent.agent_id}
-                onClick={() => setSelectedAgentId(agent.agent_id!)}
+                key={agent.agent_id || agentName}
+                onClick={() => setSelectedAgentName(agentName)}
                 className={`w-full p-4 rounded-xl text-left transition-all border ${
                   isSelected
                     ? "bg-blue-900/50 border-blue-500/50 shadow-lg"
@@ -312,7 +346,7 @@ const AdminPanel: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold text-sm text-white truncate">
-                        {meta.name || agent.agent_config.name || agent.agent_id}
+                        {meta.name || agentName || "Unknown Agent"}
                       </h3>
                     </div>
                     <p className="text-xs text-slate-400 line-clamp-2">
@@ -322,14 +356,10 @@ const AdminPanel: React.FC = () => {
                       <span className="text-xs text-slate-500">
                         {agent.agent_config.model}
                       </span>
-                      {agent.created_at && (
-                        <>
-                          <span className="text-xs text-slate-500">•</span>
-                          <span className="text-xs text-slate-500">
-                            {new Date(agent.created_at).toLocaleDateString()}
-                          </span>
-                        </>
-                      )}
+                      <span className="text-xs text-slate-500">•</span>
+                      <span className="text-xs text-slate-500">
+                        {agent.status || "active"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -354,9 +384,7 @@ const AdminPanel: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white">
-                  {agentMeta.name ||
-                    currentAgent?.agent_config.name ||
-                    selectedAgentId}
+                  {agentMeta.name || selectedAgentName || "No Agent Selected"}
                 </h2>
                 <p className="text-slate-400 mt-1">
                   {agentMeta.description || "AI Agent Configuration"}
@@ -391,7 +419,7 @@ const AdminPanel: React.FC = () => {
                     ? "Saving..."
                     : saveStatus === "success"
                     ? "Saved Successfully!"
-                    : "Save Failed"}
+                    : "Save Failed (Update not implemented)"}
                 </div>
               )}
 
@@ -444,6 +472,7 @@ const AdminPanel: React.FC = () => {
                       !unsavedChanges || saveStatus === "saving" || isLocked
                     }
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors shadow-md"
+                    title="Note: Update functionality may not be implemented in backend"
                   >
                     <Save size={16} />
                     Save Changes
@@ -462,23 +491,21 @@ const AdminPanel: React.FC = () => {
               </div>
             </div>
             <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
-              <div className="text-xs text-slate-500 mb-1">Created At</div>
+              <div className="text-xs text-slate-500 mb-1">Status</div>
               <div className="text-sm font-semibold text-slate-300">
-                {currentAgent?.created_at
-                  ? new Date(currentAgent.created_at).toLocaleDateString()
-                  : "Unknown"}
+                {currentAgent?.status || "unknown"}
               </div>
             </div>
             <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
               <div className="text-xs text-slate-500 mb-1">Instructions</div>
               <div className="text-sm font-semibold text-slate-300">
-                {(currentAgent?.agent_config.instructions?.length || 0).toLocaleString()} chars
+                {editedInstructions.length.toLocaleString()} chars
               </div>
             </div>
             <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
               <div className="text-xs text-slate-500 mb-1">Agent ID</div>
               <div className="text-xs text-slate-400 break-all">
-                {currentAgent?.agent_id}
+                {currentAgent?.agent_id || "unknown"}
               </div>
             </div>
           </div>
@@ -527,7 +554,7 @@ const AdminPanel: React.FC = () => {
               ) : (
                 <div className="prose prose-invert max-w-none">
                   <pre className="whitespace-pre-wrap text-slate-200 font-mono text-sm leading-relaxed bg-transparent">
-                    {editedInstructions || "No instructions defined"}
+                    {editedInstructions || "No instructions available. Instructions may need to be loaded separately or may not be accessible through the current API."}
                   </pre>
                 </div>
               )}
@@ -535,6 +562,7 @@ const AdminPanel: React.FC = () => {
           </div>
         </div>
       </div>
+      
       {/* New Agent Modal */}
       <CreateAgentModal
         open={showCreateModal}

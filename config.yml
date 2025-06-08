@@ -16,7 +16,7 @@ defaults:
     embedding_dim: 384
     chunk_size: 512
   agent_endpoints:
-    classifier: "http://x2ansible-api:8000/api/classify"
+    classifier: "http://x2ansible-api:8000/api/chef/analyze/stream"
     context: "http://x2ansible-api:8000/api/context"
     converter: "http://x2ansible-api:8000/api/convert"
     validator: "http://x2ansible-api:8000/api/validate"

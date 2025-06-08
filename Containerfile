@@ -16,7 +16,7 @@ COPY config.yaml ./config.yaml
 
 # Accept build arguments for both contexts
 ARG NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
-ARG BACKEND_URL=http://host.containers.internal:8000
+ARG BACKEND_URL=http://localhost:8000
 
 # Set environment variables
 ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
@@ -30,7 +30,7 @@ RUN echo "🔧 Build-time environment:" && \
     echo "BACKEND_URL=$BACKEND_URL"
 
 # Try building with timeout (no verbose flag)
-RUN echo "🚀 Starting Next.js build..." && \
+RUN echo " Starting Next.js build..." && \
     timeout 600 npm run build && \
     echo " Build completed successfully!"
 

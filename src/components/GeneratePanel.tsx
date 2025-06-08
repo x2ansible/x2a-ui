@@ -120,7 +120,7 @@ export default function GeneratePanel({
     setError(null);
     setPlaybook("");
     setStreamingState({ isStreaming: false, currentText: '', fullText: '', currentIndex: 0 });
-    logMessage("🚀 Starting playbook generation...");
+    logMessage(" Starting playbook generation...");
     try {
       const payload = {
         input_code: code,

@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(healthResponse);
   } catch (error) {
-    console.error("💥 Admin health check error:", error);
+    console.error(" Admin health check error:", error);
     return NextResponse.json(
       { 
         status: "unhealthy",

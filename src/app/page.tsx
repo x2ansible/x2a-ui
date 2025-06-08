@@ -162,7 +162,7 @@ export default function Page() {
                 disabled={wf.comingSoon}
                 style={{ minHeight: 44 }}
               >
-                🚀 Try This Workflow
+                 Try This Workflow
               </button>
               <div className={`pointer-events-none absolute inset-0 rounded-2xl group-hover:opacity-40 opacity-20 group-hover:scale-110 scale-100 transition-all duration-300 group-hover:blur-xl bg-gradient-to-br ${wf.cardColor}`} />
               {wf.comingSoon && (

@@ -290,7 +290,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
         lint_profile: selectedProfile
       };
 
-      logMessage(`🚀 Sending playbook to ansible-lint service...`);
+      logMessage(` Sending playbook to ansible-lint service...`);
 
       const response = await fetch('/api/validate', {
         method: 'POST',
