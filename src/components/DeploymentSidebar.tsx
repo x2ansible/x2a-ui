@@ -16,7 +16,7 @@ interface DeploymentSidebarProps {
     rollbackStrategy: 'immediate' | 'gradual' | 'none';
     notifications: boolean;
   };
-  setDeploymentConfig: (config: any) => void;
+  setDeploymentConfig: (config: unknown) => void;
   playbookReady: boolean;
 }
 
@@ -26,7 +26,7 @@ export default function DeploymentSidebar({
   playbookReady 
 }: DeploymentSidebarProps) {
   
-  const handleConfigChange = (key: string, value: any) => {
+  const handleConfigChange = (key: string, value: unknown) => {
     setDeploymentConfig({
       ...deploymentConfig,
       [key]: value

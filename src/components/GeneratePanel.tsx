@@ -19,7 +19,7 @@ import {
 interface GeneratePanelProps {
   code: string;
   context: string;
-  classificationResult?: any;
+  classificationResult?: unknown;
   onLogMessage?: (message: string) => void;
   onComplete?: (playbook: string) => void;
 }
@@ -145,7 +145,7 @@ export default function GeneratePanel({
       } else {
         throw new Error("No playbook in response");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage = err.message || "Generation failed";
       setError(errorMessage);
       logMessage(` Generation failed: ${errorMessage}`);

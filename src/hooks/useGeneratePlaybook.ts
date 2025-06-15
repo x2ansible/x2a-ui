@@ -56,7 +56,7 @@ export function useGeneratePlaybook() {
         }
 
         setResult(data as GenerateResponse);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (err?.name === "AbortError") {
           setError("Request cancelled.");
         } else {

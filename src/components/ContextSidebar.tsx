@@ -17,7 +17,7 @@ interface ContextSidebarProps {
     environmentType?: 'development' | 'staging' | 'production';
     scanDepth?: 'shallow' | 'medium' | 'deep';
   };
-  setContextConfig?: (config: any) => void;
+  setContextConfig?: (config: unknown) => void;
   onDocUploaded?: () => void;
 }
 
@@ -56,7 +56,7 @@ export default function ContextSidebar({
         setVectorDbs(Array.isArray(data) ? data : []);
         
         const currentDb = Array.isArray(data) 
-          ? data.find((db: any) => 
+          ? data.find((db: unknown) => 
               db.identifier === vectorDbId || 
               db.provider_resource_id === vectorDbId ||
               db.vector_db_id === vectorDbId
@@ -116,7 +116,7 @@ export default function ContextSidebar({
     }
   };
 
-  const handleConfigChange = (key: string, value: any) => {
+  const handleConfigChange = (key: string, value: unknown) => {
     if (setContextConfig && contextConfig) {
       setContextConfig({
         ...contextConfig,

@@ -5,7 +5,7 @@ interface WorkflowActionsProps {
   currentStep: number;
   loading: boolean;
   code: string;
-  workflowResult: any;
+  workflowResult: unknown;
   onExecuteStep: (step: number) => void;
   onNextStep: () => void;
   onPreviousStep: () => void;
@@ -16,31 +16,31 @@ const stepActions = {
     action: "Classify Code", 
     icon: "🔍", 
     description: "Analyze and classify the code",
-    canProceed: (result: any) => result?.classification?.convertible
+    canProceed: (result: unknown) => result?.classification?.convertible
   },
   1: { 
     action: "Analyze Context", 
     icon: "📋", 
     description: "Gather context and dependencies",
-    canProceed: (result: any) => result?.context?.dependencies
+    canProceed: (result: unknown) => result?.context?.dependencies
   },
   2: { 
     action: "Convert Code", 
     icon: "⚙️", 
     description: "Convert to target format",
-    canProceed: (result: any) => result?.conversion?.generated_files?.length > 0
+    canProceed: (result: unknown) => result?.conversion?.generated_files?.length > 0
   },
   3: { 
     action: "Validate Output", 
     icon: "", 
     description: "Validate converted code",
-    canProceed: (result: any) => result?.validation?.syntax_valid
+    canProceed: (result: unknown) => result?.validation?.syntax_valid
   },
   4: { 
     action: "Deploy", 
     icon: "", 
     description: "Deploy to target environment",
-    canProceed: (result: any) => result?.deployment?.status === 'success'
+    canProceed: (result: unknown) => result?.deployment?.status === 'success'
   }
 };
 

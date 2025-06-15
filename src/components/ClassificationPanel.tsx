@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 import {
@@ -33,8 +33,6 @@ export interface ClassificationResult {
   duration_ms?: number;
   manual_estimate_ms?: number;
   speedup?: number;
-  
-  // New fields from backend response
   cookbook_name?: string;
   version_requirements?: {
     min_chef_version?: string;
@@ -68,52 +66,114 @@ export interface ClassificationResult {
     method_used?: string;
     session_id?: string;
   };
+  tree_sitter_facts?: {
+    complexity_score?: number;
+    syntax_success_rate?: number;
+    total_resources?: number;
+    verified_cookbook_name?: string;
+    verified_version?: string;
+    has_metadata?: boolean;
+  };
+  analysis_method?: string;
 }
 
 type Tab = 'overview' | 'functionality' | 'requirements' | 'recommendations' | 'conversion';
 
-// ============================
-// ENHANCED HELPER FUNCTIONS
-// ============================
+export interface ClassificationPanelProps {
+  classificationResult?: ClassificationResult;
+  analyzedFiles?: string[];
+  selectedFile?: string;
+  selectedGitFile?: string;
+  code?: string;
+  loading?: boolean;
+  step?: number;
+}
 
-const getDisplayValue = (value: any, fallback: string = 'Not specified'): string => {
-  if (value === null || value === undefined || value === '' || 
-      value === 'Unknown' || value === 'Not assessed' || value === 'Not specified') {
+// === HELPERS (ALL) ===
+const getDisplayValue = (value: unknown, fallback: string = 'Not specified'): string => {
+  if (value === null || value === undefined || value === '' ||
+    value === 'Unknown' || value === 'Not assessed' || value === 'Not specified') {
     return fallback;
   }
   return String(value);
 };
 
-const getDisplayToolLanguage = (classification: string): string => {
-  if (!classification || classification === 'Unknown') {
+// UPDATED: Simplified tool/language detection - just show "Chef"
+const getDisplayToolLanguage = (result: ClassificationResult): string => {
+  if (!result) return 'Infrastructure Code';
+  
+  // Check if we have Chef-specific indicators
+  if (result.tree_sitter_facts?.verified_cookbook_name ||
+      result.cookbook_name ||
+      result.version_requirements?.min_chef_version || 
+      result.analysis_method === 'tree_sitter_llm' ||
+      result.confidence_source === 'chef_semantic_analysis') {
     return 'Chef';
   }
   
-  if (classification.toLowerCase().includes('uploaded_cookbook') || 
-      classification.toLowerCase().includes('cookbook_')) {
-    return 'Chef';
+  // For non-Chef tools (future support)
+  const classification = result.classification;
+  if (classification) {
+    if (classification.toLowerCase().includes('terraform')) return 'Terraform';
+    if (classification.toLowerCase().includes('ansible')) return 'Ansible';
+    if (classification.toLowerCase().includes('puppet')) return 'Puppet';
+    if (classification.toLowerCase().includes('docker')) return 'Docker';
+    if (classification.toLowerCase().includes('kubernetes') || classification.toLowerCase().includes('k8s')) return 'Kubernetes';
+    if (classification.toLowerCase().includes('helm')) return 'Helm';
+    
+    // Handle compound classifications
+    if (classification.includes('+')) {
+      return classification;
+    }
+    
+    // Capitalize and return the classification as-is
+    return classification
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   }
   
-  if (classification.includes('+')) {
-    return classification;
-  }
+  // Generic fallback
+  return 'Infrastructure Code';
+};
+
+// Simplified - no cookbook display name needed
+const getCookbookDisplayName = (result: ClassificationResult): string => {
+  return ''; // Return empty string - no subtitle needed
+};
+
+// Get tool-specific color
+const getToolColor = (result: ClassificationResult): string => {
+  const tool = getDisplayToolLanguage(result).toLowerCase();
   
-  return classification
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+  switch (true) {
+    case tool.includes('chef'):
+      return 'text-orange-400';
+    case tool.includes('terraform'):
+      return 'text-purple-400';
+    case tool.includes('ansible'):
+      return 'text-red-400';
+    case tool.includes('puppet'):
+      return 'text-blue-400';
+    case tool.includes('docker'):
+      return 'text-cyan-400';
+    case tool.includes('kubernetes'):
+      return 'text-indigo-400';
+    case tool.includes('helm'):
+      return 'text-pink-400';
+    default:
+      return 'text-blue-400'; // Default color
+  }
 };
 
 const getMigrationEffortDisplay = (result: ClassificationResult): { text: string, level: string } => {
   const effort = result.version_requirements?.migration_effort;
   const hours = result.version_requirements?.estimated_hours;
-  
   if (!effort || effort === 'Unknown' || effort === 'Not assessed') {
     const services = result.functionality?.services?.length || 0;
     const packages = result.functionality?.packages?.length || 0;
     const files = result.functionality?.files_managed?.length || 0;
     const totalItems = services + packages + files;
-    
     if (totalItems > 10) {
       return { text: 'High (inferred)', level: 'HIGH' };
     } else if (totalItems > 5) {
@@ -122,70 +182,62 @@ const getMigrationEffortDisplay = (result: ClassificationResult): { text: string
       return { text: 'Low (inferred)', level: 'LOW' };
     }
   }
-  
   let display = effort;
   if (hours && hours > 0) {
     display += ` (${hours}h)`;
   }
-  
   return { text: display, level: effort.toUpperCase() };
 };
 
 const getComplexityDisplay = (result: ClassificationResult): { text: string, level: string, details: string } => {
   const complexity = result.complexity_level;
-  
   if (!complexity || complexity === 'Unknown') {
     const services = result.functionality?.services?.length || 0;
     const packages = result.functionality?.packages?.length || 0;
     const files = result.functionality?.files_managed?.length || 0;
-    const deps = result.dependencies ? 
-      (typeof result.dependencies === 'string' ? 
-       result.dependencies.split(',').length : 0) : 0;
-    
+    const deps = result.dependencies ?
+      (typeof result.dependencies === 'string' ?
+        result.dependencies.split(',').length : 0) : 0;
     const totalItems = services + packages + files + Math.min(deps, 5);
-    
     if (totalItems > 15) {
-      return { 
-        text: 'High', 
+      return {
+        text: 'High',
         level: 'HIGH',
         details: `${services} services, ${packages} packages, ${files} files`
       };
     } else if (totalItems > 8) {
-      return { 
-        text: 'Medium', 
+      return {
+        text: 'Medium',
         level: 'MEDIUM',
         details: `${services} services, ${packages} packages, ${files} files`
       };
     } else if (totalItems > 3) {
-      return { 
-        text: 'Low', 
+      return {
+        text: 'Low',
         level: 'LOW',
         details: `${services} services, ${packages} packages, ${files} files`
       };
     } else {
-      return { 
-        text: 'Simple', 
+      return {
+        text: 'Simple',
         level: 'SIMPLE',
-        details: 'Basic cookbook structure'
+        details: 'Basic infrastructure structure'
       };
     }
   }
-  
   const complexityParts = complexity.split(' - ');
   const level = complexityParts[0];
   const details = complexityParts.slice(1).join(' - ') || result.detailed_analysis?.substring(0, 50) + '...' || '';
-  
   return { text: level, level: level.toUpperCase(), details };
 };
 
-const getConvertibleDisplay = (result: ClassificationResult): { 
-  status: boolean | null, 
-  text: string, 
+const getConvertibleDisplay = (result: ClassificationResult): {
+  status: boolean | null,
+  text: string,
   color: string,
-  confidence: string 
+  confidence: string
 } => {
   const convertible = result.convertible;
-  
   if (convertible === true) {
     return {
       status: true,
@@ -205,7 +257,6 @@ const getConvertibleDisplay = (result: ClassificationResult): {
     const hasPackages = result.functionality?.packages?.length > 0;
     const hasLowMigrationEffort = result.version_requirements?.migration_effort === 'LOW';
     const hasHighRisk = result.recommendations?.risk_factors?.length > 3;
-    
     if (hasHighRisk) {
       return {
         status: false,
@@ -231,39 +282,45 @@ const getConvertibleDisplay = (result: ClassificationResult): {
   }
 };
 
+// UPDATED: Use actual primary purpose from backend
 const getPrimaryPurposeDisplay = (result: ClassificationResult): string => {
-  const purpose = result.functionality?.primary_purpose ||
-                 result.summary ||
-                 result.detailed_analysis?.split('\n')[0] ||
-                 '';
-  
-  if (!purpose || purpose === 'No summary available') {
-    const services = result.functionality?.services || [];
-    const packages = result.functionality?.packages || [];
-    
-    if (services.length > 0) {
-      const serviceList = services.slice(0, 2).join(' and ');
-      const moreServices = services.length > 2 ? ` and ${services.length - 2} more` : '';
-      return `Manages ${serviceList}${moreServices} service${services.length === 1 ? '' : 's'}`;
-    } else if (packages.length > 0) {
-      const packageList = packages.slice(0, 2).join(' and ');
-      const morePackages = packages.length > 2 ? ` and ${packages.length - 2} more` : '';
-      return `Installs and configures ${packageList}${morePackages}`;
-    } else {
-      return 'Chef cookbook for system configuration and management';
-    }
+  // Use the actual primary_purpose from backend
+  const purpose = result.functionality?.primary_purpose;
+  if (purpose && purpose !== 'No summary available') {
+    return purpose;
   }
   
-  return purpose;
+  // Fallback to summary or detailed_analysis
+  const summary = result.summary || result.detailed_analysis?.split('\n')[0];
+  if (summary && summary !== 'No summary available') {
+    return summary;
+  }
+  
+  // Smart fallback based on services/packages
+  const services = result.functionality?.services || [];
+  const packages = result.functionality?.packages || [];
+  
+  if (services.length > 0) {
+    const serviceList = services.slice(0, 2).join(' and ');
+    const moreServices = services.length > 2 ? ` and ${services.length - 2} more` : '';
+    return `Manages ${serviceList}${moreServices} service${services.length === 1 ? '' : 's'}`;
+  } else if (packages.length > 0) {
+    const packageList = packages.slice(0, 2).join(' and ');
+    const morePackages = packages.length > 2 ? ` and ${packages.length - 2} more` : '';
+    return `Installs and configures ${packageList}${morePackages}`;
+  } else {
+    // Use detected tool name
+    const toolName = getDisplayToolLanguage(result);
+    return `${toolName} configuration for system management`;
+  }
 };
 
-const getSpeedupDisplay = (result: ClassificationResult): { 
-  speedup: number, 
-  display: string, 
-  color: string 
+const getSpeedupDisplay = (result: ClassificationResult): {
+  speedup: number,
+  display: string,
+  color: string
 } => {
   const speedup = result.speedup;
-  
   if (!speedup || speedup <= 1) {
     return {
       speedup: 1,
@@ -271,13 +328,11 @@ const getSpeedupDisplay = (result: ClassificationResult): {
       color: 'text-gray-400'
     };
   }
-  
   let color = 'text-green-400';
   if (speedup > 100) color = 'text-purple-400';
   else if (speedup > 50) color = 'text-blue-400';
   else if (speedup > 10) color = 'text-green-400';
   else color = 'text-yellow-400';
-  
   return {
     speedup,
     display: `${speedup.toFixed(1)}x faster`,
@@ -287,7 +342,6 @@ const getSpeedupDisplay = (result: ClassificationResult): {
 
 const formatTimeDisplay = (ms?: number): string => {
   if (!ms || ms <= 0) return 'N/A';
-  
   if (ms < 1000) return `${ms.toFixed(0)}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   if (ms < 3600000) return `${(ms / 60000).toFixed(1)}m`;
@@ -296,7 +350,6 @@ const formatTimeDisplay = (ms?: number): string => {
 
 const formatHoursDisplay = (hours?: number): string => {
   if (!hours || hours <= 0) return 'N/A';
-  
   if (hours < 1) return `${(hours * 60).toFixed(0)}min`;
   if (hours < 24) return `${hours.toFixed(1)}h`;
   return `${(hours / 24).toFixed(1)}d`;
@@ -310,22 +363,18 @@ const getRiskLevelDisplay = (result: ClassificationResult): {
   const riskFactors = result.recommendations?.risk_factors || [];
   const migrationEffort = result.version_requirements?.migration_effort?.toUpperCase();
   const hasDeprecated = result.version_requirements?.deprecated_features?.length > 0;
-  
   let riskScore = 0;
   const factors = [...riskFactors];
-  
   if (migrationEffort === 'HIGH') {
     riskScore += 3;
     factors.push('High migration complexity');
   } else if (migrationEffort === 'MEDIUM') {
     riskScore += 1;
   }
-  
   if (hasDeprecated) {
     riskScore += 2;
     factors.push('Uses deprecated features');
   }
-  
   if (riskScore >= 4) {
     return { level: 'HIGH', color: 'text-red-400', factors };
   } else if (riskScore >= 2) {
@@ -380,20 +429,35 @@ const getPriorityColor = (priority?: string) => {
   }
 };
 
-// ============================
-// MAIN COMPONENT
-// ============================
-
-const ClassificationPanel: React.FC<{ 
-  classificationResult?: ClassificationResult;
-  selectedFile?: string;
-  selectedGitFile?: string;
-  code?: string;
-  loading?: boolean;
-  step?: number;
-}> = ({ classificationResult }) => {
+const ClassificationPanel: React.FC<ClassificationPanelProps> = ({
+  classificationResult,
+  analyzedFiles,
+  selectedFile,
+  selectedGitFile,
+  code,
+  loading,
+  step
+}) => {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [showComplexityDesc, setShowComplexityDesc] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Initialize component state
+  useEffect(() => {
+    setIsInitialized(true);
+  }, []);
+
+  // Ensure we have valid classification result
+  if (!isInitialized) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-900">
+        <div className="text-center text-gray-400">
+          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-lg text-gray-300">Initializing analysis panel...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!classificationResult) {
     return (
@@ -431,7 +495,7 @@ const ClassificationPanel: React.FC<{
 
   return (
     <div className="w-full h-full flex flex-col bg-gray-900 text-white">
-      {/* Header with enhanced info */}
+      {/* Header */}
       <div className="flex-shrink-0">
         <div className="border-b border-gray-700 p-4">
           <div className="flex items-center justify-between">
@@ -468,22 +532,16 @@ const ClassificationPanel: React.FC<{
           </div>
         </div>
 
-        {/* Enhanced Quick Stats */}
+        {/* Quick Stats */}
         <div className="p-4 bg-gray-800/50 border-b border-gray-700">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            {/* Tool/Language */}
+            {/* Tool/Language - simplified to just show "Chef" */}
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-              <div className="text-lg font-bold text-blue-400 capitalize truncate">
-                Chef
+              <div className={`text-lg font-bold capitalize truncate ${getToolColor(result)}`}>
+                {getDisplayToolLanguage(result)}
               </div>
               <div className="text-xs text-gray-500 mt-1">Tool/Language</div>
-              {result.cookbook_name && result.cookbook_name !== result.classification && (
-                <div className="text-xs text-gray-400 mt-0.5 truncate">
-                  {result.cookbook_name.replace(/_/g, ' ')}
-                </div>
-              )}
             </div>
-
             {/* Convertible Status */}
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               {(() => {
@@ -491,9 +549,9 @@ const ClassificationPanel: React.FC<{
                 return (
                   <>
                     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${convertibleInfo.color}`}>
-                      {convertibleInfo.status === true ? <CheckCircle size={12} /> : 
-                       convertibleInfo.status === false ? <XCircle size={12} /> :
-                       <AlertTriangle size={12} />}
+                      {convertibleInfo.status === true ? <CheckCircle size={12} /> :
+                        convertibleInfo.status === false ? <XCircle size={12} /> :
+                          <AlertTriangle size={12} />}
                       {convertibleInfo.text}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Convertible</div>
@@ -506,7 +564,6 @@ const ClassificationPanel: React.FC<{
                 );
               })()}
             </div>
-
             {/* Complexity */}
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50 relative">
               {(() => {
@@ -530,7 +587,6 @@ const ClassificationPanel: React.FC<{
                       )}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Complexity</div>
-                    {/* Enhanced Popover */}
                     {showComplexityDesc && complexityInfo.details && (
                       <div
                         className="absolute left-1/2 top-full z-50 mt-2 w-80 -translate-x-1/2 bg-gray-900 text-gray-100 border border-gray-700 rounded-xl shadow-xl px-4 py-3 text-xs text-left"
@@ -538,8 +594,8 @@ const ClassificationPanel: React.FC<{
                       >
                         <div className="flex justify-between items-center mb-2">
                           <span className="font-semibold text-blue-300">Complexity Analysis</span>
-                          <button 
-                            className="ml-2 px-1 text-gray-400 hover:text-blue-300" 
+                          <button
+                            className="ml-2 px-1 text-gray-400 hover:text-blue-300"
                             onClick={() => setShowComplexityDesc(false)}
                           >
                             ×
@@ -559,7 +615,6 @@ const ClassificationPanel: React.FC<{
                 );
               })()}
             </div>
-
             {/* Migration Effort */}
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               {(() => {
@@ -580,7 +635,6 @@ const ClassificationPanel: React.FC<{
                 );
               })()}
             </div>
-
             {/* Analysis Performance */}
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               {(() => {
@@ -613,7 +667,6 @@ const ClassificationPanel: React.FC<{
                   {getPrimaryPurposeDisplay(result)}
                 </div>
               </div>
-
               {/* Feature Summary */}
               <div className="bg-green-900/20 rounded-lg p-2 border-l-4 border-green-500">
                 <div className="text-xs text-green-300 font-medium mb-1">Components</div>
@@ -627,14 +680,13 @@ const ClassificationPanel: React.FC<{
                   {result.functionality?.files_managed?.length > 0 && (
                     <div>📁 {result.functionality.files_managed.length} file(s)</div>
                   )}
-                  {(!result.functionality?.services?.length && 
-                    !result.functionality?.packages?.length && 
+                  {(!result.functionality?.services?.length &&
+                    !result.functionality?.packages?.length &&
                     !result.functionality?.files_managed?.length) && (
                     <div className="text-gray-400">Standard configuration</div>
                   )}
                 </div>
               </div>
-
               {/* Risk Assessment */}
               <div className="bg-yellow-900/20 rounded-lg p-2 border-l-4 border-yellow-500">
                 <div className="text-xs text-yellow-300 font-medium mb-1">Risk Level</div>
@@ -675,300 +727,154 @@ const ClassificationPanel: React.FC<{
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-y-auto rh-scrollbar px-4 py-4">
+        
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Enhanced Summary Section */}
-            <div>
-              <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                <FileCode size={16} />
+            {/* Executive Summary */}
+            <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg p-4 border border-blue-500/30">
+              <h3 className="text-lg font-semibold text-blue-300 mb-3 flex items-center gap-2">
+                <FileCode size={18} />
                 Executive Summary
               </h3>
-              <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-4 rounded-lg border border-blue-500/30">
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  {getPrimaryPurposeDisplay(result)}
-                </p>
-                {result.summary && result.summary !== getPrimaryPurposeDisplay(result) && (
-                  <p className="text-gray-400 text-sm mt-2 leading-relaxed">
-                    {result.summary}
-                  </p>
+              <div className="space-y-3">
+                <div className="text-gray-300 leading-relaxed">
+                  {result.summary || getPrimaryPurposeDisplay(result)}
+                </div>
+                {result.detailed_analysis && (
+                  <div className="bg-gray-800/50 rounded-lg p-3 border-l-4 border-blue-500">
+                    <h4 className="text-sm font-medium text-blue-300 mb-2">Detailed Analysis</h4>
+                    <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">
+                      {result.detailed_analysis}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Migration Assessment Grid */}
-            <div>
-              <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                <TrendingUp size={16} />
-                Migration Assessment
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Migration Effort */}
-                <div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/50">
+            {/* Key Metrics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Conversion Feasibility */}
+              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
+                  <GitBranch size={16} />
+                  Conversion Feasibility
+                </h4>
+                {(() => {
+                  const convertibleInfo = getConvertibleDisplay(result);
+                  return (
+                    <div className="space-y-2">
+                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${convertibleInfo.color}`}>
+                        {convertibleInfo.status === true ? <CheckCircle size={16} /> :
+                          convertibleInfo.status === false ? <XCircle size={16} /> :
+                            <AlertTriangle size={16} />}
+                        {convertibleInfo.text}
+                      </div>
+                      <p className="text-xs text-gray-400 leading-relaxed">
+                        {convertibleInfo.confidence}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Resource Requirements */}
+              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
+                  <Clock size={16} />
+                  Resource Requirements
+                </h4>
+                <div className="space-y-2">
                   {(() => {
                     const migrationInfo = getMigrationEffortDisplay(result);
                     return (
-                      <>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-gray-400">Migration Effort</span>
-                          <div className={`px-2 py-1 rounded text-xs font-medium ${getMigrationEffortColor(migrationInfo.level)}`}>
-                            {migrationInfo.level}
-                          </div>
-                        </div>
-                        <div className="text-lg font-bold text-gray-200">
-                          {migrationInfo.text}
-                        </div>
-                        {result.version_requirements?.estimated_hours && (
-                          <div className="text-sm text-gray-400 mt-1">
-                            Estimated: {formatHoursDisplay(result.version_requirements.estimated_hours)}
-                          </div>
-                        )}
-                      </>
+                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${getMigrationEffortColor(migrationInfo.level)}`}>
+                        <TrendingUp size={14} />
+                        {migrationInfo.text}
+                      </div>
                     );
                   })()}
+                  {result.version_requirements?.estimated_hours && (
+                    <p className="text-xs text-gray-400">
+                      Estimated effort: {formatHoursDisplay(result.version_requirements.estimated_hours)}
+                    </p>
+                  )}
                 </div>
+              </div>
 
-                {/* Conversion Readiness */}
-                <div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/50">
-                  {(() => {
-                    const convertibleInfo = getConvertibleDisplay(result);
-                    return (
-                      <>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-gray-400">Conversion Ready</span>
-                          <div className={`px-2 py-1 rounded text-xs font-medium ${convertibleInfo.color}`}>
-                            {convertibleInfo.text.toUpperCase()}
-                          </div>
-                        </div>
-                        <div className="text-lg font-bold text-gray-200">
-                          {convertibleInfo.status === true ? 'Ready' : 
-                           convertibleInfo.status === false ? 'Needs Work' : 'Under Review'}
-                        </div>
-                        <div className="text-sm text-gray-400 mt-1">
-                          {convertibleInfo.confidence}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
+              {/* Risk Assessment */}
+              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
+                  <Shield size={16} />
+                  Risk Assessment
+                </h4>
+                {(() => {
+                  const riskInfo = getRiskLevelDisplay(result);
+                  return (
+                    <div className="space-y-2">
+                      <div className={`text-sm font-medium ${riskInfo.color}`}>
+                        {riskInfo.level} RISK
+                      </div>
+                      <p className="text-xs text-gray-400 leading-relaxed">
+                        {riskInfo.factors[0] || 'No significant risks identified'}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
-            {/* Detailed Analysis */}
-            {result.detailed_analysis && (
-              <div>
-                <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                  <Settings size={16} />
-                  Technical Analysis
-                </h3>
-                <div className="bg-gray-900/50 rounded-lg border border-gray-700/70 p-4">
-                  <div className="prose prose-invert max-w-none text-sm">
-                    <ReactMarkdown>
-                      {result.detailed_analysis}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Key Operations */}
-            {result.key_operations?.length > 0 && (
-              <div>
-                <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
+            {result.key_operations && result.key_operations.length > 0 && (
+              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                   <Wrench size={16} />
-                  Key Operations ({result.key_operations.length})
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  Key Operations
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {result.key_operations.map((operation, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 bg-green-900/20 rounded-lg border border-green-500/30">
-                      <div className="text-green-400 font-bold text-xs flex-shrink-0 mt-1 bg-green-900/30 px-1.5 py-0.5 rounded">
-                        {String(i + 1).padStart(2, '0')}
-                      </div>
-                      <div className="text-gray-300 text-sm flex-1">
-                        {operation}
-                      </div>
+                    <div key={i} className="flex items-center gap-2 p-2 bg-blue-900/20 rounded-lg border border-blue-500/30">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                      <span className="text-gray-300 text-sm">{operation}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Resource Summary */}
-            {(result.functionality?.services?.length > 0 || 
-              result.functionality?.packages?.length > 0 || 
-              result.resources?.length > 0) && (
-              <div>
-                <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
+            {/* Resources */}
+            {result.resources && result.resources.length > 0 && (
+              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
                   <Package size={16} />
-                  Resource Overview
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Services */}
-                  {result.functionality?.services?.length > 0 && (
-                    <div className="bg-blue-900/20 p-3 rounded-lg border border-blue-500/30">
-                      <div className="text-blue-300 font-medium text-sm mb-2">
-                        Services ({result.functionality.services.length})
-                      </div>
-                      <div className="space-y-1">
-                        {result.functionality.services.slice(0, 3).map((service, i) => (
-                          <div key={i} className="text-gray-300 text-xs flex items-center gap-2">
-                            <Server size={10} />
-                            {service}
-                          </div>
-                        ))}
-                        {result.functionality.services.length > 3 && (
-                          <div className="text-gray-400 text-xs">
-                            +{result.functionality.services.length - 3} more
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Packages */}
-                  {result.functionality?.packages?.length > 0 && (
-                    <div className="bg-green-900/20 p-3 rounded-lg border border-green-500/30">
-                      <div className="text-green-300 font-medium text-sm mb-2">
-                        Packages ({result.functionality.packages.length})
-                      </div>
-                      <div className="space-y-1">
-                        {result.functionality.packages.slice(0, 3).map((pkg, i) => (
-                          <div key={i} className="text-gray-300 text-xs flex items-center gap-2">
-                            <Package size={10} />
-                            {pkg}
-                          </div>
-                        ))}
-                        {result.functionality.packages.length > 3 && (
-                          <div className="text-gray-400 text-xs">
-                            +{result.functionality.packages.length - 3} more packages
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Files Managed */}
-                  {result.functionality?.files_managed?.length > 0 && (
-                    <div className="bg-yellow-900/20 p-3 rounded-lg border border-yellow-500/30">
-                      <div className="text-yellow-300 font-medium text-sm mb-2">
-                        Files ({result.functionality.files_managed.length})
-                      </div>
-                      <div className="space-y-1">
-                        {result.functionality.files_managed.slice(0, 3).map((file, i) => (
-                          <div key={i} className="text-gray-300 text-xs flex items-center gap-2">
-                            <FileCode size={10} />
-                            <code className="font-mono truncate">{file}</code>
-                          </div>
-                        ))}
-                        {result.functionality.files_managed.length > 3 && (
-                          <div className="text-gray-400 text-xs">
-                            +{result.functionality.files_managed.length - 3} more
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  Managed Resources
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {result.resources.map((resource, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/30 text-green-300 rounded-md text-xs border border-green-500/30">
+                      <Package size={12} />
+                      {resource}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Performance Metrics */}
-            {(result.duration_ms || result.speedup) && (
-              <div>
-                <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                  <Zap size={16} />
-                  Performance Analysis
-                </h3>
-                <div className="bg-gradient-to-r from-purple-900/20 to-blue-900/20 p-4 rounded-lg border border-purple-500/30">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div>
-                      <div className="text-2xl font-bold text-blue-400">
-                        {formatTimeDisplay(result.duration_ms)}
-                      </div>
-                      <div className="text-xs text-gray-400">AI Analysis</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-orange-400">
-                        {formatTimeDisplay(result.manual_estimate_ms)}
-                      </div>
-                      <div className="text-xs text-gray-400">Manual Est.</div>
-                    </div>
-                    {result.speedup && result.speedup > 1 && (
-                      <div>
-                        <div className={`text-2xl font-bold ${getSpeedupDisplay(result).color}`}>
-                          {result.speedup.toFixed(1)}x
-                        </div>
-                        <div className="text-xs text-gray-400">Speedup</div>
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-2xl font-bold text-green-400">
-                        {result.version_requirements?.estimated_hours ? 
-                         Math.round(((result.version_requirements.estimated_hours * 60 * 60 * 1000) / (result.duration_ms || 1))) + '%' : 
-                         'N/A'}
-                      </div>
-                      <div className="text-xs text-gray-400">Efficiency</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Metadata Section */}
-            {result.metadata && (
-              <div>
-                <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                  <Info size={16} />
-                  Analysis Metadata
-                </h3>
-                <div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Analyzed:</span>
-                        <span className="text-gray-300">
-                          {result.metadata.analyzed_at ? 
-                           new Date(result.metadata.analyzed_at).toLocaleString() : 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Agent Version:</span>
-                        <span className="text-gray-300">{result.metadata.agent_version || 'N/A'}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Correlation ID:</span>
-                        <span className="text-gray-300 font-mono text-xs">
-                          {result.metadata.correlation_id?.substring(0, 8) || 'N/A'}...
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Method:</span>
-                        <span className="text-gray-300">
-                          {result.session_info?.method_used || 'Standard'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Confidence:</span>
-                        <span className="text-gray-300">{result.confidence_source || 'High'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Session:</span>
-                        <span className="text-gray-300 font-mono text-xs">
-                          {result.session_info?.session_id?.substring(0, 8) || 'N/A'}...
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+            {/* Configuration Details */}
+            {result.configuration_details && (
+              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700/50">
+                <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center gap-2">
+                  <Settings size={16} />
+                  Configuration Details
+                </h4>
+                <div className="text-sm text-gray-300 bg-gray-900/50 p-3 rounded-lg whitespace-pre-line font-mono">
+                  {result.configuration_details}
                 </div>
               </div>
             )}
           </div>
         )}
-        
+
         {/* FUNCTIONALITY TAB */}
         {activeTab === 'functionality' && (
           <div className="space-y-4">
@@ -983,7 +889,7 @@ const ClassificationPanel: React.FC<{
                 </p>
               </div>
             )}
-
+            
             {/* Services */}
             {result.functionality?.services?.length ? (
               <div>
@@ -1001,7 +907,7 @@ const ClassificationPanel: React.FC<{
                 </div>
               </div>
             ) : null}
-
+            
             {/* Packages */}
             {result.functionality?.packages?.length ? (
               <div>
@@ -1019,7 +925,7 @@ const ClassificationPanel: React.FC<{
                 </div>
               </div>
             ) : null}
-
+            
             {/* Files Managed */}
             {result.functionality?.files_managed?.length ? (
               <div>
@@ -1037,7 +943,7 @@ const ClassificationPanel: React.FC<{
                 </div>
               </div>
             ) : null}
-
+            
             {/* Reusability & Customization */}
             {(result.functionality?.reusability || result.functionality?.customization_points?.length) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1053,7 +959,6 @@ const ClassificationPanel: React.FC<{
                     </div>
                   </div>
                 )}
-
                 {result.functionality?.customization_points?.length ? (
                   <div>
                     <h4 className="text-sm font-semibold text-gray-200 mb-2">Customization Points</h4>
@@ -1074,7 +979,6 @@ const ClassificationPanel: React.FC<{
         {/* REQUIREMENTS TAB */}
         {activeTab === 'requirements' && (
           <div className="space-y-4">
-            {/* Version Requirements */}
             <div>
               <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
                 <Database size={16} />
@@ -1095,7 +999,6 @@ const ClassificationPanel: React.FC<{
                     </div>
                   </div>
                 </div>
-
                 {result.version_requirements?.estimated_hours && (
                   <div className="mt-4 pt-4 border-t border-gray-700/50">
                     <div className="text-sm text-gray-500 mb-2">Estimated Migration Time</div>
@@ -1110,7 +1013,6 @@ const ClassificationPanel: React.FC<{
                     </div>
                   </div>
                 )}
-
                 {result.version_requirements?.deprecated_features?.length ? (
                   <div className="mt-4 pt-4 border-t border-gray-700/50">
                     <div className="text-sm text-gray-500 mb-2">Deprecated Features</div>
@@ -1125,8 +1027,7 @@ const ClassificationPanel: React.FC<{
                 ) : null}
               </div>
             </div>
-
-            {/* Dependencies */}
+            
             {result.dependencies && (
               <div>
                 <h3 className="text-base font-semibold text-gray-200 mb-2">Dependencies</h3>
@@ -1162,7 +1063,7 @@ const ClassificationPanel: React.FC<{
                 </div>
               </div>
             )}
-
+            
             {result.recommendations?.migration_priority && (
               <div>
                 <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
@@ -1175,7 +1076,7 @@ const ClassificationPanel: React.FC<{
                 </div>
               </div>
             )}
-
+            
             {result.recommendations?.risk_factors?.length ? (
               <div>
                 <h3 className="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
@@ -1195,12 +1096,12 @@ const ClassificationPanel: React.FC<{
               <div className="text-center py-8">
                 <Shield size={48} className="mx-auto mb-3 text-green-600" />
                 <p className="text-green-400 font-semibold">No Risk Factors Identified</p>
-                <p className="text-sm text-gray-500 mt-1">This cookbook appears to be low-risk for migration</p>
+                <p className="text-sm text-gray-500 mt-1">This configuration appears to be low-risk for migration</p>
               </div>
             )}
           </div>
         )}
-        
+
         {/* CONVERSION TAB */}
         {activeTab === 'conversion' && (
           <div className="space-y-4">
@@ -1284,7 +1185,7 @@ const ClassificationPanel: React.FC<{
                 )}
               </div>
             )}
-
+            
             {/* Conversion Steps */}
             {getConvertibleDisplay(result).status === true && (
               <div className="bg-blue-900/10 p-4 rounded-lg border border-blue-500/20">
@@ -1304,7 +1205,7 @@ const ClassificationPanel: React.FC<{
                     <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</div>
                     <div>
                       <div className="font-medium text-gray-300">Code Conversion</div>
-                      <div className="text-sm text-gray-500">Transform Chef cookbook to Ansible playbook</div>
+                      <div className="text-sm text-gray-500">Transform infrastructure code to Ansible playbook</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     
     // Validate the request
     if (!body.code || typeof body.code !== 'string') {
-      console.error('❌ Invalid request: missing or invalid code field');
+      console.error(' Invalid request: missing or invalid code field');
       return NextResponse.json(
         { error: 'Missing or invalid code field' }, 
         { status: 400 }
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Backend error:', errorText);
+      console.error(' Backend error:', errorText);
       
       // Try to parse error as JSON if possible
       let errorData;
@@ -57,8 +57,8 @@ export async function POST(request: NextRequest) {
     console.log(' Successfully got analysis result from backend');
     
     return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('❌ Chef analysis proxy error:', error);
+  } catch (error: unknown) {
+    console.error(' Chef analysis proxy error:', error);
     return NextResponse.json(
       { error: `Analysis failed: ${error.message}` },
       { status: 500 }

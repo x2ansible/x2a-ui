@@ -18,7 +18,7 @@ interface GenerateSidebarProps {
     useVars: boolean;
     // You can add more, but only booleans will render checkboxes below
   };
-  setConversionConfig: (config: any) => void;
+  setConversionConfig: (config: unknown) => void;
   contextSummary?: {
     tokens: number;
     docCount: number;
@@ -33,7 +33,7 @@ export default function GenerateSidebar({
 }: GenerateSidebarProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const handleChange = (key: string, value: any) => {
+  const handleChange = (key: string, value: unknown) => {
     setConversionConfig({ ...conversionConfig, [key]: value });
   };
 

@@ -41,7 +41,7 @@ interface DeploymentPanelProps {
     notifications: boolean;
   };
   onLogMessage?: (message: string) => void;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: unknown) => void;
 }
 
 interface DeploymentState {
@@ -49,7 +49,7 @@ interface DeploymentState {
   currentPhase: string;
   progress: number;
   logs: string[];
-  result?: any;
+  result?: unknown;
 }
 
 type DeploymentPhase = 
@@ -173,7 +173,7 @@ export default function DeploymentPanel({
       
       if (onComplete) onComplete(data);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMessage = err.message || "Deployment failed";
       setError(errorMessage);
       setDeploymentState(prev => ({

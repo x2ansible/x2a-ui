@@ -24,7 +24,7 @@ interface ContextItem {
 interface ContextResult {
   success: boolean;
   context: ContextItem[];
-  steps?: any[];
+  steps?: unknown[];
 }
 
 const ContextPanel: React.FC<ContextPanelProps> = ({
@@ -126,7 +126,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
 
       const decoder = new TextDecoder();
       let buffer = "";
-      let finalResult: any = null;
+      let finalResult: unknown = null;
       let contextItems: ContextItem[] = [];
 
       while (true) {
@@ -199,11 +199,11 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
       if (contextItems.length && onContextRetrieved) {
         onContextRetrieved(contextItems.map((c) => c.text).join("\n\n"));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const duration = Date.now() - startTime;
       const errorMessage = err?.message || "Unknown error in context discovery";
       setError(errorMessage);
-      logMessage(`❌ Context discovery failed after ${duration}ms: ${errorMessage}`);
+      logMessage(` Context discovery failed after ${duration}ms: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -211,7 +211,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
 
   // --- Markdown Components: Hydration-safe code renderer ---
   const markdownComponents = {
-    code({ node, inline, className, children, ...props }: any) {
+    code({ node, inline, className, children, ...props }: unknown) {
       const match = /language-(\w+)/.exec(className || "");
       if (inline) {
         return (

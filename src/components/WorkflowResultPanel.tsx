@@ -27,7 +27,7 @@ interface WorkflowResult {
     syntax_valid: boolean;
     security_issues: string[];
     best_practices: string[];
-    test_results: any[];
+    test_results: unknown[];
   };
   deployment?: {
     target_environment: string;

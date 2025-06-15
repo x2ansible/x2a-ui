@@ -11,12 +11,12 @@ export interface AgentConfig {
     name: string;
     model: string;
     instructions: string;
-    sampling_params?: any;
+    sampling_params?: unknown;
     max_infer_iters?: number;
-    tools?: any[];
-    toolgroups?: any[];
+    tools?: unknown[];
+    toolgroups?: unknown[];
     enable_session_persistence?: boolean;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   created_at?: string;
   status?: string;
@@ -35,14 +35,14 @@ export interface AgentStatusResponse {
     status: string;
     pattern: string;
   }>;
-  specialized_agents?: any;
+  specialized_agents?: unknown;
 }
 
 export interface CreateAgentRequest {
   name: string;
   model: string;
   instructions: string;
-  tools?: any[];
+  tools?: unknown[];
 }
 
 export interface ApiError {

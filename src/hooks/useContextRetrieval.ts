@@ -19,7 +19,7 @@ export function useContextRetrieval() {
         const result = await response.json();
         setContextResult(result);
         return result;
-      } catch (err: any) {
+      } catch (err: unknown) {
         setError(err.message || "Unknown error");
         setContextResult(null);
       } finally {

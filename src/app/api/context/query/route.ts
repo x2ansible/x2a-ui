@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Backend error:", errorText);
+      console.error(" Backend error:", errorText);
       return NextResponse.json(
         { error: `Backend error: ${response.status}`, detail: errorText },
         { status: response.status }
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          function pump(): any {
+          function pump(): unknown {
             return reader.read().then(({ done, value }) => {
               if (done) {
                 controller.close();

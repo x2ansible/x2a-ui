@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      let err: any = "Unknown backend error";
+      let err: unknown = "Unknown backend error";
       try {
         err = await response.json();
       } catch {}

@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(data, { status: response.status });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Log error for troubleshooting
     console.error("Proxy /api/generate error:", error);
 

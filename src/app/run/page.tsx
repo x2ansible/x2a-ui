@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -27,7 +27,19 @@ import { ClassificationResponse } from "@/types/api";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://host.containers.internal:8000";
 const steps = ["Analyze", "Context", "Convert", "Validate", "Deploy"];
 
+interface ValidationResult {
+  errors?: unknown[];
+  warnings?: unknown[];
+  status?: string;
+  [key: string]: unknown;
+}
+
 function RunWorkflowPageInner() {
+  // ========================================
+  // 1. ALL REACT HOOKS MUST BE DECLARED FIRST
+  // NO CONDITIONAL LOGIC BEFORE HOOKS
+  // ========================================
+  
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,13 +69,12 @@ function RunWorkflowPageInner() {
 
   // Logging state
   const [logMessages, setLogMessages] = useState<string[]>([]);
-  const [sidebarMessages, setSidebarMessages] = useState<string[]>([]);
 
   // Classification and workflow results
   const [classificationResult, setClassificationResult] = useState<ClassificationResponse | undefined>(undefined);
   const [retrievedContext, setRetrievedContext] = useState<string>("");
   const [generatedPlaybook, setGeneratedPlaybook] = useState<string>("");
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
   // Configuration state for different workflow steps
   const [contextConfig, setContextConfig] = useState({
@@ -99,20 +110,25 @@ function RunWorkflowPageInner() {
     notifications: true
   });
 
-  // Utility functions for logging and step management
-  const addLogMessage = (msg: string) =>
+  // Utility functions - ALL useCallback hooks MUST be declared here
+  const addLogMessage = useCallback((msg: string) => {
     setLogMessages(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  }, []);
 
-  const addSidebarMessage = (msg: string) =>
-    setSidebarMessages(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  const addSidebarMessage = useCallback((msg: string) => {
+    console.warn('Sidebar message:', msg);
+  }, []);
 
-  const markStepAsCompleted = (stepIndex: number) => {
-    if (!completedSteps.includes(stepIndex)) {
-      setCompletedSteps(prev => [...prev, stepIndex].sort((a, b) => a - b));
-    }
-  };
+  const markStepAsCompleted = useCallback((stepIndex: number) => {
+    setCompletedSteps(prev => {
+      if (!prev.includes(stepIndex)) {
+        return [...prev, stepIndex].sort((a, b) => a - b);
+      }
+      return prev;
+    });
+  }, []);
 
-  const handleStepClick = (stepIndex: number) => {
+  const handleStepClick = useCallback((stepIndex: number) => {
     const isAccessible = stepIndex === 0 ||
       completedSteps.includes(stepIndex) ||
       stepIndex === step ||
@@ -121,49 +137,33 @@ function RunWorkflowPageInner() {
       setStep(stepIndex);
       setLogMessages([]);
     }
-  };
+  }, [completedSteps, step, loading]);
 
-  // Workflow step handlers
-  const handleContextAnalysis = () => {
-    setLoading(true);
-    addLogMessage("🔍 Starting context analysis...");
-  };
-
-  const handleConversion = () => {
-    setLoading(true);
-    addLogMessage("🔄 Starting conversion process...");
-  };
-
-  const handleValidation = () => {
-    addLogMessage("🛡️ Validation process initiated...");
-  };
-
-  const handleValidationComplete = (result: any) => {
+  const handleValidationComplete = useCallback((result: ValidationResult) => {
     setValidationResult(result);
-    markStepAsCompleted(3);
-    setLoading(false);
-    addLogMessage(" Validation completed successfully");
-
-    const issueCount = result.issues?.length || 0;
-    const status = result.passed ? "PASSED" : "FAILED";
-    addLogMessage(`📊 Validation ${status} with ${issueCount} issues found`);
-
-    if (result.debug_info?.num_issues !== undefined) {
-      addLogMessage(`🔍 Debug: ${result.debug_info.num_issues} issues processed`);
+    if (result && (!result.errors || (Array.isArray(result.errors) && result.errors.length === 0))) {
+      markStepAsCompleted(3);
+      addLogMessage("Validation completed successfully - ready for deployment");
     }
-  };
+  }, [markStepAsCompleted, addLogMessage]);
 
-  const handleDeployment = () => {
-    setLoading(true);
-    addLogMessage(" Starting deployment process...");
-    setTimeout(() => {
-      setLoading(false);
-      markStepAsCompleted(4);
-      addLogMessage(" Deployment completed successfully");
-    }, 4000);
-  };
+  const onContextRetrieved = useCallback((context: string) => {
+    setRetrievedContext(context);
+    markStepAsCompleted(1);
+  }, [markStepAsCompleted]);
 
-  // Custom hooks
+  const onGenerateComplete = useCallback((playbook: string) => {
+    setGeneratedPlaybook(playbook);
+    markStepAsCompleted(2);
+    addLogMessage("Playbook generated and ready for validation");
+  }, [markStepAsCompleted, addLogMessage]);
+
+  const onDeploymentComplete = useCallback((_result: ValidationResult) => {
+    markStepAsCompleted(4);
+    addLogMessage("Deployment completed successfully!");
+  }, [markStepAsCompleted, addLogMessage]);
+
+  // Custom hooks - ALL MUST BE DECLARED BEFORE ANY CONDITIONAL LOGIC
   const { fetchFolders, fetchFilesInFolder, fetchFileContent, handleUpload } = useFileOperations({
     BACKEND_URL,
     setFolderList,
@@ -177,7 +177,7 @@ function RunWorkflowPageInner() {
     setLoading
   });
 
-  const { handleCloneRepo, fetchGitFolders, fetchGitFiles, fetchGitFileContent } = useGitOperations({
+  const { handleCloneRepo, fetchGitFiles, fetchGitFileContent } = useGitOperations({
     BACKEND_URL,
     gitUrl,
     setGitRepoName,
@@ -190,53 +190,21 @@ function RunWorkflowPageInner() {
     setLoading
   });
 
-  // Multi-file classification handler with proper debugging
-  const handleManualClassify = (files?: { path: string; content: string }[]) => {
-    if (loading) {
-      addLogMessage("⚠️ Classification already in progress");
-      return;
-    }
-
-    if (files && files.length > 0) {
-      const fileList = files.map(f => f.path).join(", ");
-      const combinedContent = `# Combined Analysis of ${files.length} files: ${fileList}
-
-${files
-  .map(file => `
-# ========================================
-# File: ${file.path}
-# ========================================
-${file.content}`)
-  .join('\n\n')}`;
-
-      setCode(combinedContent);
-      addLogMessage(`📄 Combined ${files.length} files: ${fileList}`);
-      addLogMessage(`📊 Total content: ${combinedContent.length} characters`);
-
-      setTimeout(() => {
-        classifyCode(combinedContent);
-      }, 200);
-
-      return;
-    }
-
-    if (!code.trim()) {
-      addLogMessage("⚠️ No code loaded. Please select or upload a file first");
-      return;
-    }
-    classifyCode(code);
-  };
-
   const { classifyCode } = useClassification({
     BACKEND_URL,
-    code,
-    setClassificationResult: (result) => {
-      setClassificationResult(result ?? undefined); // <- The key fix!
-      if (result && !result.error) {
-        markStepAsCompleted(0);
-        addLogMessage(" Analysis completed - ready for next step");
+    files: {},
+    setClassificationResult: useCallback((result) => {
+      try {
+        setClassificationResult(result ?? undefined);
+        if (result && !(result as Record<string, unknown>).error) {
+          markStepAsCompleted(0);
+          addLogMessage("Analysis completed - ready for next step");
+        }
+      } catch (error) {
+        console.error('Error setting classification result:', error);
+        addLogMessage(`Error processing analysis result: ${error}`);
       }
-    },
+    }, [markStepAsCompleted, addLogMessage]),
     setStep,
     step,
     setLoading,
@@ -244,7 +212,51 @@ ${file.content}`)
     addLog: addLogMessage
   });
 
-  // Effects
+  // Enhanced multi-file classification with better error handling
+  const handleManualClassify = useCallback((files?: { path: string; content: string }[]) => {
+    if (loading) {
+      addLogMessage("Classification already in progress");
+      return;
+    }
+
+    try {
+      if (files && files.length > 0) {
+        const filesObj: Record<string, string> = {};
+        files.forEach(f => {
+          if (f.path && f.content) {
+            filesObj[f.path] = f.content;
+          }
+        });
+
+        if (Object.keys(filesObj).length === 0) {
+          addLogMessage("No valid files found for analysis");
+          return;
+        }
+
+        addLogMessage(`Selected ${files.length} files: ${Object.keys(filesObj).join(", ")}`);
+        addLogMessage(`Total size: ${Object.values(filesObj).reduce((sum, c) => sum + c.length, 0)} characters`);
+
+        setTimeout(() => {
+          classifyCode(filesObj);
+        }, 200);
+
+        return;
+      }
+
+      if (!code.trim()) {
+        addLogMessage("No code loaded. Please select or upload a file first");
+        return;
+      }
+      
+      addLogMessage("Starting single file analysis...");
+      classifyCode({ "input_file": code });
+    } catch (error) {
+      console.error('Error in manual classification:', error);
+      addLogMessage(`Classification error: ${error}`);
+    }
+  }, [loading, addLogMessage, code, classifyCode]);
+
+  // ALL useEffect hooks MUST be declared here
   useEffect(() => {
     if (status === "unauthenticated") {
       const t = setTimeout(() => router.replace("/"), 2000);
@@ -262,16 +274,21 @@ ${file.content}`)
     if (retrievedContext && !completedSteps.includes(1)) {
       markStepAsCompleted(1);
     }
-  }, [retrievedContext, completedSteps]);
+  }, [retrievedContext, completedSteps, markStepAsCompleted]);
 
-  // Check if user has admin privileges
+  // ========================================
+  // 2. NOW WE CAN HAVE CONDITIONAL LOGIC AND EARLY RETURNS
+  // ALL HOOKS HAVE BEEN DECLARED ABOVE
+  // ========================================
+
+  // Check admin privileges
   const allowedEmails = ["rbanda@redhat.com"];
-  const isAdmin = session?.user?.email && allowedEmails.includes(session.user.email) ||
+  const isAdmin = (session?.user?.email && allowedEmails.includes(session.user.email)) ||
                   process.env.NODE_ENV === "development";
 
-  // Get current workflow for admin link (null-safe)
   const currentWorkflow = searchParams?.get('workflow') || 'x2ansible';
 
+  // Early returns are now safe
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
@@ -287,13 +304,14 @@ ${file.content}`)
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 text-center">
-          <p className="mb-4 text-gray-800 dark:text-gray-200 font-semibold">🔒 Please log in to access this page</p>
+          <p className="mb-4 text-gray-800 dark:text-gray-200 font-semibold">Please log in to access this page</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">Redirecting to login...</p>
         </div>
       </div>
     );
   }
 
+  // Main component render
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       {/* Header */}
@@ -317,7 +335,7 @@ ${file.content}`)
             onClick={() => signOut({ callbackUrl: "/" })}
             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors rh-btn-primary"
           >
-            🔒 Sign out
+            Sign out
           </button>
         </div>
       </div>
@@ -427,10 +445,7 @@ ${file.content}`)
             <ContextPanel
               code={code}
               onLogMessage={addLogMessage}
-              onContextRetrieved={(context: string) => {
-                setRetrievedContext(context);
-                markStepAsCompleted(1);
-              }}
+              onContextRetrieved={onContextRetrieved}
             />
           ) : step === 2 ? (
             <GeneratePanel
@@ -438,11 +453,7 @@ ${file.content}`)
               context={retrievedContext}
               classificationResult={classificationResult}
               onLogMessage={addLogMessage}
-              onComplete={(playbook: string) => {
-                setGeneratedPlaybook(playbook);
-                markStepAsCompleted(2);
-                addLogMessage("📋 Playbook generated and ready for validation");
-              }}
+              onComplete={onGenerateComplete}
             />
           ) : step === 3 ? (
             <ValidationPanel
@@ -473,10 +484,7 @@ ${file.content}`)
                 notifications: deploymentConfig.notifications
               }}
               onLogMessage={addLogMessage}
-              onComplete={(result: any) => {
-                markStepAsCompleted(4);
-                addLogMessage("🎉 Deployment completed successfully!");
-              }}
+              onComplete={onDeploymentComplete}
             />
           ) : (
             <ClassificationPanel

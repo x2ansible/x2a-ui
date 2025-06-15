@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       // Try to parse error message from response
-      let err: any = "Unknown backend error";
+      let err: unknown = "Unknown backend error";
       try {
         err = await response.json();
       } catch {}

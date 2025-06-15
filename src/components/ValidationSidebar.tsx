@@ -24,8 +24,8 @@ interface ValidationSidebarProps {
     bestPractices: boolean;
     customRules: string[];
   };
-  setValidationConfig: (config: any) => void;
-  validationResult?: any;
+  setValidationConfig: (config: unknown) => void;
+  validationResult?: unknown;
   loading?: boolean;
   selectedProfile?: string;
   onProfileChange?: (profile: string) => void;
@@ -99,7 +99,7 @@ export default function ValidationSidebar({
     });
   }, []);
 
-  const handleConfigChange = (key: string, value: any) => {
+  const handleConfigChange = (key: string, value: unknown) => {
     setValidationConfig({
       ...validationConfig,
       [key]: value
@@ -141,8 +141,8 @@ export default function ValidationSidebar({
     if (!validationResult) return null;
     
     const issues = validationResult.issues || [];
-    const errors = issues.filter((i: any) => i.severity === 'error' || i.level === 'error').length;
-    const warnings = issues.filter((i: any) => i.severity === 'warning' || i.level === 'warning').length;
+    const errors = issues.filter((i: unknown) => i.severity === 'error' || i.level === 'error').length;
+    const warnings = issues.filter((i: unknown) => i.severity === 'warning' || i.level === 'warning').length;
     
     return { errors, warnings, total: issues.length };
   };

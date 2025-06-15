@@ -34,14 +34,14 @@ interface WorkflowSidebarProps {
   handleManualClassify: (files?: { path: string; content: string }[]) => void;
   code: string;
   setCode?: (code: string) => void;
-  contextConfig?: any;
-  setContextConfig?: (config: any) => void;
-  conversionConfig?: any;
-  setConversionConfig?: (config: any) => void;
-  validationConfig?: any;
-  setValidationConfig?: (config: any) => void;
-  deploymentConfig?: any;
-  setDeploymentConfig?: (config: any) => void;
+  contextConfig?: unknown;
+  setContextConfig?: (config: unknown) => void;
+  conversionConfig?: unknown;
+  setConversionConfig?: (config: unknown) => void;
+  validationConfig?: unknown;
+  setValidationConfig?: (config: unknown) => void;
+  deploymentConfig?: unknown;
+  setDeploymentConfig?: (config: unknown) => void;
 }
 
 // Clean fetchTree function
@@ -119,7 +119,7 @@ ${file.content}`)
       } else {
         throw new Error("No files received from server or invalid format");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Analysis failed:", error);
       alert(`Analysis failed: ${error.message}`);
     } finally {
