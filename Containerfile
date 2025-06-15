@@ -7,11 +7,11 @@ USER 0
 RUN chown -R 1001:0 /app && chmod -R g+rw /app
 
 # Copy package files and install dependencies
-COPY x2ansible-ui/package*.json ./
+COPY package*.json ./
 RUN npm install --legacy-peer-deps --no-audit
 
 # Copy source code and config
-COPY x2ansible-ui/ ./
+COPY . .
 COPY config.yaml ./config.yaml
 
 # Accept build arguments for both contexts
