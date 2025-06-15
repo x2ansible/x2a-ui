@@ -1,0 +1,94 @@
+name: Build & Publish UI Image to GHCR
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  ORG: x2ansible
+  IMAGE_NAME: x2a-ui # 👈 UI image, not api
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Podman and gh CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install podman gh
+
+      - name: Generate version tags
+        id: version
+        run: |
+          DATE_TAG=$(date +'%Y.%m.%d')
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          BUILD_NUMBER=$(git rev-list --count HEAD)
+          SEMANTIC_VERSION="${DATE_TAG}.${BUILD_NUMBER}"
+          TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+
+          echo "DATE_TAG=${DATE_TAG}" >> $GITHUB_OUTPUT
+          echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "SEMANTIC_VERSION=${SEMANTIC_VERSION}" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        env:
+          CR_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${CR_PAT}" | podman login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Build image and tag
+        run: |
+          podman build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.description=UI frontend for x2ansible" \
+            --label "org.opencontainers.image.url=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.documentation=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.version=${{ steps.version.outputs.SEMANTIC_VERSION }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --label "org.opencontainers.image.licenses=MIT" \
+            --label "org.opencontainers.image.vendor=${{ env.ORG }}" \
+            --label "org.opencontainers.image.title=${{ env.IMAGE_NAME }}" \
+            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:latest \
+            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SEMANTIC_VERSION }} \
+            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.DATE_TAG }} \
+            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SHORT_SHA }} \
+            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:build-${{ steps.version.outputs.BUILD_NUMBER }} \
+            -f Containerfile .
+
+      - name: Push all image tags
+        run: |
+          podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:latest
+          podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SEMANTIC_VERSION }}
+          podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.DATE_TAG }}
+          podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SHORT_SHA }}
+          podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:build-${{ steps.version.outputs.BUILD_NUMBER }}
+
+      - name: Final info & usage summary
+        run: |
+          echo "🔗 Make image public: https://github.com/orgs/${{ env.ORG }}/packages/container/${{ env.IMAGE_NAME }}/settings"
+          echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:latest"
+          echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SEMANTIC_VERSION }}"
+          echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.DATE_TAG }}"
+          echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SHORT_SHA }}"
+          echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:build-${{ steps.version.outputs.BUILD_NUMBER }}"
+
+      - name: Test public pull (optional)
+        continue-on-error: true
+        run: |
+          podman logout ${{ env.REGISTRY }} || true
+          podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:latest || echo "If this fails, set visibility to public in GHCR package settings."
