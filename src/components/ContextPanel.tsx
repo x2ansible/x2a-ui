@@ -1,7 +1,25 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import dynamic from "next/dynamic";
+
+// Dynamically import SyntaxHighlighter to avoid SSR issues
+const SyntaxHighlighter = dynamic(
+  () => import("react-syntax-highlighter").then((mod) => mod.Prism),
+  { 
+    ssr: false,
+    loading: () => (
+      <pre className="bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto">
+        <code>Loading...</code>
+      </pre>
+    )
+  }
+);
+
+// Dynamically import the theme
+const oneDark = dynamic(
+  () => import("react-syntax-highlighter/dist/esm/styles/prism").then((mod) => mod.oneDark),
+  { ssr: false }
+);
 import {
   MagnifyingGlassIcon,
   CheckCircleIcon,
@@ -165,7 +183,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
               } else if (eventData.event === 'progress') {
                 logMessage(`📊 ${eventData.msg || 'Processing...'}`);
               } else if (eventData.event === 'start') {
-                logMessage(` ${eventData.msg || 'Context search started'}`);
+                logMessage(`⚡ ${eventData.msg || 'Context search started'}`);
               }
             } catch (parseError) {
               console.warn("Failed to parse event data:", line, parseError);
@@ -188,7 +206,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
         throw new Error("No context patterns found in the knowledge base");
       }
 
-      logMessage(` Context retrieved in ${duration}ms (${contextItems.length} patterns)`);
+      logMessage(`✅ Context retrieved in ${duration}ms (${contextItems.length} patterns)`);
 
       setResult({
         success: true,
@@ -203,7 +221,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
       const duration = Date.now() - startTime;
       const errorMessage = err?.message || "Unknown error in context discovery";
       setError(errorMessage);
-      logMessage(` Context discovery failed after ${duration}ms: ${errorMessage}`);
+      logMessage(`❌ Context discovery failed after ${duration}ms: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -211,8 +229,9 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
 
   // --- Markdown Components: Hydration-safe code renderer ---
   const markdownComponents = {
-    code({ node, inline, className, children, ...props }: unknown) {
+    code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || "");
+      
       if (inline) {
         return (
           <code className={className} {...props}>
@@ -220,24 +239,31 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
           </code>
         );
       }
-      // BLOCK: Only one parent node, no fragment, no PreTag!
+
+      // Use div wrapper instead of letting ReactMarkdown create a p tag
       return (
-        <SyntaxHighlighter
-          style={oneDark}
-          language={match ? match[1] : ""}
-          customStyle={{
-            borderRadius: 12,
-            padding: "1.2em",
-            fontSize: "1em",
-            background: "#23272e",
-            boxShadow: "0 2px 24px 0 rgba(20,40,100,0.20)",
-            margin: "0.5em 0"
-          }}
-          {...props}
-        >
-          {String(children).replace(/\n$/, "")}
-        </SyntaxHighlighter>
+        <div style={{ margin: "0.5em 0" }}>
+          <SyntaxHighlighter
+            style={oneDark || {}}
+            language={match ? match[1] : ""}
+            customStyle={{
+              borderRadius: 12,
+              padding: "1.2em",
+              fontSize: "1em",
+              background: "#23272e",
+              boxShadow: "0 2px 24px 0 rgba(20,40,100,0.20)",
+              margin: 0
+            }}
+            {...props}
+          >
+            {String(children).replace(/\n$/, "")}
+          </SyntaxHighlighter>
+        </div>
       );
+    },
+    // Override paragraph to prevent p > div issues
+    p({ children }: any) {
+      return <div className="mb-4">{children}</div>;
     },
   };
 

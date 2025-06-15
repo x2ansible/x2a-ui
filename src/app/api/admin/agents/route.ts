@@ -5,7 +5,7 @@ const BACKEND_URL =
   process.env.LLAMASTACK_API_URL ||
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://localhost:8321"\;
+  "http://localhost:8321";
 
 // GET /api/admin/agents - List all agents using the new backend structure
 export async function GET(request: NextRequest) {
