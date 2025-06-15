@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("❌ Context ingest proxy error:", error);
+    console.error(" Context ingest proxy error:", error);
     return NextResponse.json(
       { 
         error: "Failed to ingest document", 

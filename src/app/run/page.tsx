@@ -54,6 +54,7 @@ function RunWorkflowPageInner() {
   const [sourceType, setSourceType] = useState<"upload" | "existing" | "git">("upload");
   const [uploadKey, setUploadKey] = useState(Date.now());
   const [code, setCode] = useState("");
+  const [analysisFiles, setAnalysisFiles] = useState<Record<string, string>>({}); // NEW: Preserve analyzed files
   const [selectedFile, setSelectedFile] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
   const [folderList, setFolderList] = useState<string[]>([]);
@@ -163,6 +164,12 @@ function RunWorkflowPageInner() {
     addLogMessage("Deployment completed successfully!");
   }, [markStepAsCompleted, addLogMessage]);
 
+  // NEW: Store analyzed files for context step
+  const handleAnalysisComplete = useCallback((files: Record<string, string>) => {
+    setAnalysisFiles(files);
+    addLogMessage(`Analysis files preserved: ${Object.keys(files).length} files (${Object.values(files).reduce((sum, content) => sum + content.length, 0)} characters total)`);
+  }, [addLogMessage]);
+
   // Custom hooks - ALL MUST BE DECLARED BEFORE ANY CONDITIONAL LOGIC
   const { fetchFolders, fetchFilesInFolder, fetchFileContent, handleUpload } = useFileOperations({
     BACKEND_URL,
@@ -212,7 +219,7 @@ function RunWorkflowPageInner() {
     addLog: addLogMessage
   });
 
-  // Enhanced multi-file classification with better error handling
+  // UPDATED: Enhanced multi-file classification with analysis preservation
   const handleManualClassify = useCallback((files?: { path: string; content: string }[]) => {
     if (loading) {
       addLogMessage("Classification already in progress");
@@ -233,6 +240,9 @@ function RunWorkflowPageInner() {
           return;
         }
 
+        // PRESERVE the analyzed files for context step
+        handleAnalysisComplete(filesObj);
+
         addLogMessage(`Selected ${files.length} files: ${Object.keys(filesObj).join(", ")}`);
         addLogMessage(`Total size: ${Object.values(filesObj).reduce((sum, c) => sum + c.length, 0)} characters`);
 
@@ -248,13 +258,17 @@ function RunWorkflowPageInner() {
         return;
       }
       
+      // For single file, also preserve in structured format
+      const singleFileObj = { "input_file": code };
+      handleAnalysisComplete(singleFileObj);
+      
       addLogMessage("Starting single file analysis...");
-      classifyCode({ "input_file": code });
+      classifyCode(singleFileObj);
     } catch (error) {
       console.error('Error in manual classification:', error);
       addLogMessage(`Classification error: ${error}`);
     }
-  }, [loading, addLogMessage, code, classifyCode]);
+  }, [loading, addLogMessage, code, classifyCode, handleAnalysisComplete]);
 
   // ALL useEffect hooks MUST be declared here
   useEffect(() => {
@@ -444,12 +458,14 @@ function RunWorkflowPageInner() {
           {step === 1 ? (
             <ContextPanel
               code={code}
+              analysisFiles={analysisFiles}
               onLogMessage={addLogMessage}
               onContextRetrieved={onContextRetrieved}
             />
           ) : step === 2 ? (
             <GeneratePanel
               code={code}
+              analysisFiles={analysisFiles}
               context={retrievedContext}
               classificationResult={classificationResult}
               onLogMessage={addLogMessage}
