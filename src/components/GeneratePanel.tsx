@@ -3,16 +3,10 @@ import {
   SparklesIcon, 
   ClipboardDocumentIcon, 
   ExclamationCircleIcon,
-  DocumentTextIcon,
   CodeBracketIcon,
   PlayIcon,
   StopIcon,
   CheckCircleIcon,
-  InformationCircleIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  EyeIcon,
-  EyeSlashIcon,
   ArrowPathIcon
 } from "@heroicons/react/24/outline";
 
@@ -44,7 +38,6 @@ export default function GeneratePanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode>('ready');
-  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
 
   // Streaming state
@@ -230,68 +223,6 @@ export default function GeneratePanel({
             </button>
           </div>
         </div>
-
-        {classificationResult && (
-          <div className="mb-6">
-            <button
-              onClick={() => setShowAnalysisDetails(!showAnalysisDetails)}
-              className="w-full text-left"
-            >
-              <div className="bg-slate-800/50 rounded-xl border border-slate-600/30 p-4 hover:bg-slate-800/70 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center">
-                      <DocumentTextIcon className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-100">Analysis Summary</h3>
-                      <p className="text-slate-400 text-sm">
-                        {classificationResult?.classification || 'Unknown'} • {classificationResult?.complexity_level || 'Medium'} complexity
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className={`px-3 py-1 text-xs font-medium rounded-full ${
-                      classificationResult?.convertible 
-                        ? 'bg-green-500/20 text-green-300' 
-                        : 'bg-red-500/20 text-red-300'
-                    }`}>
-                      {classificationResult?.convertible ? ' READY' : ' BLOCKED'}
-                    </div>
-                    {showAnalysisDetails ? (
-                      <ChevronUpIcon className="w-5 h-5 text-slate-400" />
-                    ) : (
-                      <ChevronDownIcon className="w-5 h-5 text-slate-400" />
-                    )}
-                  </div>
-                </div>
-                
-                {showAnalysisDetails && (
-                  <div className="mt-4 pt-4 border-t border-slate-600/30">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium text-slate-200 mb-2">Summary</h4>
-                        <p className="text-slate-300 text-sm leading-relaxed">
-                          {classificationResult?.summary || 'Analysis summary not available'}
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-slate-200 mb-2">Key Resources</h4>
-                        <div className="space-y-1">
-                          {(classificationResult?.resources || []).slice(0, 3).map((resource: string, i: number) => (
-                            <div key={i} className="text-slate-300 text-sm bg-slate-700/30 rounded px-2 py-1">
-                              {resource}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </button>
-          </div>
-        )}
 
         {(panelMode === 'generating' || panelMode === 'complete') && (
           <div className="space-y-4">

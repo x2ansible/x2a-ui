@@ -27,13 +27,53 @@ export default function AgentLogPanel({ logMessages, setLogMessages }: AgentLogP
   };
 
   const getLogIcon = (message: string) => {
-    if (message.includes('')) return { icon: '🔴', color: 'text-red-400' };
-    if (message.includes('')) return { icon: '🟢', color: 'text-green-400' };
-    if (message.includes('🔍')) return { icon: '🔵', color: 'text-blue-400' };
-    if (message.includes('📊')) return { icon: '📊', color: 'text-purple-400' };
-    if (message.includes('📋')) return { icon: '📋', color: 'text-yellow-400' };
-    if (message.includes('🎯')) return { icon: '🎯', color: 'text-orange-400' };
-    if (message.includes('📄')) return { icon: '📄', color: 'text-cyan-400' };
+    const lowerMessage = message.toLowerCase();
+    
+    // Success indicators - GREEN
+    if (lowerMessage.includes('completed') || 
+        lowerMessage.includes('success') || 
+        lowerMessage.includes('started') ||
+        lowerMessage.includes('ready') ||
+        lowerMessage.includes('connected') ||
+        lowerMessage.includes('analyzing')) {
+      return { icon: '🟢', color: 'text-green-400' };
+    }
+    
+    // Error indicators - RED
+    if (lowerMessage.includes('error') || 
+        lowerMessage.includes('failed') || 
+        lowerMessage.includes('exception') ||
+        lowerMessage.includes('denied')) {
+      return { icon: '🔴', color: 'text-red-400' };
+    }
+    
+    // Warning indicators - YELLOW/ORANGE
+    if (lowerMessage.includes('warning') || 
+        lowerMessage.includes('warn') ||
+        lowerMessage.includes('retry')) {
+      return { icon: '🟡', color: 'text-yellow-400' };
+    }
+    
+    // Info/Processing indicators - BLUE
+    if (lowerMessage.includes('starting') || 
+        lowerMessage.includes('processing') || 
+        lowerMessage.includes('loading') ||
+        lowerMessage.includes('sending') ||
+        lowerMessage.includes('receiving') ||
+        lowerMessage.includes('connecting')) {
+      return { icon: '🔵', color: 'text-blue-400' };
+    }
+    
+    // Analysis/Data indicators - PURPLE
+    if (lowerMessage.includes('extracting') || 
+        lowerMessage.includes('analysis') || 
+        lowerMessage.includes('cookbook') ||
+        lowerMessage.includes('files') ||
+        lowerMessage.includes('structural')) {
+      return { icon: '🟣', color: 'text-purple-400' };
+    }
+    
+    // Default - GRAY
     return { icon: '⚪', color: 'text-slate-400' };
   };
 
@@ -44,10 +84,12 @@ export default function AgentLogPanel({ logMessages, setLogMessages }: AgentLogP
   };
 
   const getLogType = (message: string) => {
-    if (message.includes('') || message.includes('Error') || message.includes('Failed')) return 'error';
-    if (message.includes('') || message.includes('completed') || message.includes('Success')) return 'success';
-    if (message.includes('🔍') || message.includes('Starting')) return 'info';
-    if (message.includes('📊') || message.includes('parameters')) return 'debug';
+    const lowerMessage = message.toLowerCase();
+    
+    if (lowerMessage.includes('error') || lowerMessage.includes('failed') || lowerMessage.includes('exception')) return 'error';
+    if (lowerMessage.includes('completed') || lowerMessage.includes('success') || lowerMessage.includes('started') || lowerMessage.includes('ready')) return 'success';
+    if (lowerMessage.includes('warning') || lowerMessage.includes('warn')) return 'warning';
+    if (lowerMessage.includes('starting') || lowerMessage.includes('processing') || lowerMessage.includes('analyzing')) return 'info';
     return 'default';
   };
 
@@ -118,6 +160,8 @@ export default function AgentLogPanel({ logMessages, setLogMessages }: AgentLogP
                     ? 'bg-red-500/5 border border-red-500/20' 
                     : logType === 'success'
                     ? 'bg-green-500/5 border border-green-500/20'
+                    : logType === 'warning'
+                    ? 'bg-yellow-500/5 border border-yellow-500/20'
                     : logType === 'info'
                     ? 'bg-blue-500/5 border border-blue-500/20'
                     : 'bg-slate-800/20 border border-slate-600/20'
@@ -130,6 +174,8 @@ export default function AgentLogPanel({ logMessages, setLogMessages }: AgentLogP
                       ? 'bg-red-500/20' 
                       : logType === 'success'
                       ? 'bg-green-500/20'
+                      : logType === 'warning'
+                      ? 'bg-yellow-500/20'
                       : logType === 'info'
                       ? 'bg-blue-500/20'
                       : 'bg-slate-700/50'
@@ -146,6 +192,8 @@ export default function AgentLogPanel({ logMessages, setLogMessages }: AgentLogP
                         ? 'text-red-200' 
                         : logType === 'success'
                         ? 'text-green-200'
+                        : logType === 'warning'
+                        ? 'text-yellow-200'
                         : logType === 'info'
                         ? 'text-blue-200'
                         : 'text-slate-200'
@@ -164,6 +212,8 @@ export default function AgentLogPanel({ logMessages, setLogMessages }: AgentLogP
                     ? 'bg-gradient-to-b from-red-500 to-red-600' 
                     : logType === 'success'
                     ? 'bg-gradient-to-b from-green-500 to-green-600'
+                    : logType === 'warning'
+                    ? 'bg-gradient-to-b from-yellow-500 to-yellow-600'
                     : logType === 'info'
                     ? 'bg-gradient-to-b from-blue-500 to-blue-600'
                     : 'bg-gradient-to-b from-slate-500 to-slate-600'
@@ -189,6 +239,12 @@ export default function AgentLogPanel({ logMessages, setLogMessages }: AgentLogP
               <div className="w-2 h-2 bg-red-400 rounded-full"></div>
               <span className="text-slate-400">
                 {logMessages.filter(msg => getLogType(msg) === 'error').length} Errors
+              </span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+              <span className="text-slate-400">
+                {logMessages.filter(msg => getLogType(msg) === 'warning').length} Warnings
               </span>
             </div>
           </div>

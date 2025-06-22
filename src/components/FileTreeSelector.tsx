@@ -1,11 +1,12 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { FolderIcon, DocumentIcon } from "@heroicons/react/24/outline";
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { ChevronRightIcon, ChevronDownIcon, DocumentTextIcon, FolderIcon } from "@heroicons/react/24/outline";
 
 export interface TreeNode {
   type: "file" | "folder";
   name: string;
-  path: string;
+  path?: string;
   items?: TreeNode[];
 }
 
@@ -13,206 +14,260 @@ interface FileTreeSelectorProps {
   fetchTree: (path?: string) => Promise<TreeNode[]>;
   selectedFiles: string[];
   setSelectedFiles: (files: string[]) => void;
+  technologyType?: string;
 }
-
-// Clean API client
-class FileTreeAPI {
-  private baseUrl: string;
-
-  constructor() {
-    //  Use environment variable instead of hardcoded URL
-    this.baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://host.containers.internal:8000";
-  }
-
-  async fetchTree(path: string = ""): Promise<TreeNode[]> {
-    try {
-      const url = path 
-        ? `${this.baseUrl}/api/files/tree?path=${encodeURIComponent(path)}`
-        : `${this.baseUrl}/api/files/tree`;
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      return data.items || [];
-    } catch (error) {
-      console.error("Failed to fetch file tree:", error);
-      return [];
-    }
-  }
-
-  async fetchFiles(filePaths: string[]): Promise<{path: string, content: string}[]> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/files/get_many`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filePaths),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.files || [];
-    } catch (error) {
-      console.error("Failed to fetch files:", error);
-      throw error;
-    }
-  }
-}
-
-const api = new FileTreeAPI();
 
 export default function FileTreeSelector({ 
-  fetchTree,
+  fetchTree, 
   selectedFiles, 
-  setSelectedFiles
+  setSelectedFiles,
+  technologyType = 'chef'
 }: FileTreeSelectorProps) {
-  const [tree, setTree] = useState<TreeNode[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [filteredFiles, setFilteredFiles] = useState<string[]>([]);
 
+  // Load tree data for specific technology folder
+  const loadTree = useCallback(async () => {
+    setLoading(true);
+    try {
+      // First get the root tree to find the technology folder
+      const rootData = await fetchTree();
+      
+      // Find the technology folder
+      const techFolder = rootData.find(node => 
+        node.type === 'folder' && 
+        node.name.toLowerCase() === technologyType.toLowerCase()
+      );
+
+      if (techFolder && techFolder.items) {
+        // Show content of the technology folder
+        setTreeData(techFolder.items);
+        
+        // Extract all files from the technology folder
+        const extractFiles = (nodes: TreeNode[], basePath: string = ''): string[] => {
+          const files: string[] = [];
+          nodes.forEach(node => {
+            const currentPath = basePath ? `${basePath}/${node.name}` : node.name;
+            if (node.type === 'file') {
+              // Include the technology folder in the path
+              files.push(`${technologyType}/${currentPath}`);
+            } else if (node.type === 'folder' && node.items) {
+              files.push(...extractFiles(node.items, currentPath));
+            }
+          });
+          return files;
+        };
+        
+        const availableFiles = extractFiles(techFolder.items);
+        setFilteredFiles(availableFiles);
+        
+        // Auto-expand first level folders
+        const autoExpand = new Set<string>();
+        techFolder.items.forEach(node => {
+          if (node.type === 'folder') {
+            autoExpand.add(node.name);
+          }
+        });
+        setExpandedFolders(autoExpand);
+        
+        console.log(`📁 Loaded ${technologyType} folder:`, {
+          folders: techFolder.items.filter(n => n.type === 'folder').length,
+          files: availableFiles.length,
+          availableFiles
+        });
+        
+      } else {
+        // Technology folder doesn't exist, show empty
+        setTreeData([]);
+        setFilteredFiles([]);
+        console.log(`📁 No ${technologyType} folder found in uploads`);
+      }
+      
+    } catch (error) {
+      console.error('Failed to load file tree:', error);
+      setTreeData([]);
+      setFilteredFiles([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchTree, technologyType]);
+
+  // Reload when technology changes
   useEffect(() => {
     loadTree();
-  }, []);
+    setSelectedFiles([]);
+  }, [technologyType, loadTree, setSelectedFiles]);
 
-  const loadTree = async () => {
-    setLoading(true);
-    const treeData = await api.fetchTree();
-    setTree(treeData);
-    setLoading(false);
-  };
-
-  const toggleExpanded = (path: string) => {
-    const newExpanded = new Set(expanded);
-    if (newExpanded.has(path)) {
-      newExpanded.delete(path);
-    } else {
-      newExpanded.add(path);
-    }
-    setExpanded(newExpanded);
+  const toggleFolder = (path: string) => {
+    setExpandedFolders(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(path)) {
+        newExpanded.delete(path);
+      } else {
+        newExpanded.add(path);
+      }
+      return newExpanded;
+    });
   };
 
   const toggleFileSelection = (filePath: string) => {
-    const newSelection = selectedFiles.includes(filePath)
-      ? selectedFiles.filter(f => f !== filePath)
-      : [...selectedFiles, filePath];
-    setSelectedFiles(newSelection);
+    setSelectedFiles(
+      selectedFiles.includes(filePath)
+        ? selectedFiles.filter(f => f !== filePath)
+        : [...selectedFiles, filePath]
+    );
   };
 
-  const renderTreeNode = (node: TreeNode): React.ReactNode => {
-    const isExpanded = expanded.has(node.path);
-    const isSelected = selectedFiles.includes(node.path);
+  const selectAllFiles = () => {
+    setSelectedFiles(filteredFiles);
+  };
 
-    if (node.type === "folder") {
-      return (
-        <div key={node.path} className="select-none">
-          <div
-            className="flex items-center py-1 px-2 hover:bg-slate-700/50 rounded cursor-pointer"
-            onClick={() => toggleExpanded(node.path)}
-          >
-            {/* Clear, visible expansion indicator */}
-            <div className="w-6 h-6 flex items-center justify-center mr-1 flex-shrink-0">
-              <div className="w-4 h-4 bg-blue-500 rounded flex items-center justify-center">
-                <svg 
-                  className="w-3 h-3 text-white transition-transform"
-                  style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-                  fill="currentColor" 
-                  viewBox="0 0 20 20"
-                >
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-            <FolderIcon className="w-4 h-4 text-yellow-500 mr-2 flex-shrink-0" />
-            <span className="text-slate-200 text-sm font-medium truncate">{node.name}</span>
-          </div>
-          
-          {isExpanded && node.items && (
-            <div className="ml-6 border-l border-slate-600 pl-2">
-              {node.items.map(renderTreeNode)}
-            </div>
+  const clearSelection = () => {
+    setSelectedFiles([]);
+  };
+
+  const renderNode = (node: TreeNode, level = 0, parentPath = ''): React.ReactNode => {
+    const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+    const fullPath = `${technologyType}/${currentPath}`;
+    const isExpanded = expandedFolders.has(currentPath);
+    const isSelected = selectedFiles.includes(fullPath);
+    
+    return (
+      <div key={currentPath} className={`ml-${level * 4}`}>
+        <div
+          className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+            node.type === 'file'
+              ? isSelected
+                ? 'bg-blue-600/30 text-blue-300'
+                : 'hover:bg-gray-700/50 text-gray-300'
+              : 'hover:bg-gray-700/30 text-gray-400'
+          }`}
+          onClick={() => {
+            if (node.type === 'folder') {
+              toggleFolder(currentPath);
+            } else {
+              toggleFileSelection(fullPath);
+            }
+          }}
+        >
+          {node.type === 'folder' ? (
+            <>
+              {isExpanded ? (
+                <ChevronDownIcon className="w-4 h-4 text-gray-500" />
+              ) : (
+                <ChevronRightIcon className="w-4 h-4 text-gray-500" />
+              )}
+              <FolderIcon className="w-4 h-4 text-yellow-500" />
+              <span className="text-sm font-medium">{node.name}</span>
+              {node.items && (
+                <span className="text-xs text-gray-500 ml-auto">
+                  ({node.items.filter(item => item.type === 'file').length} files)
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="w-4 h-4"></div>
+              <DocumentTextIcon className="w-4 h-4 text-blue-400" />
+              <span className="text-sm">{node.name}</span>
+              {isSelected && (
+                <div className="w-2 h-2 bg-blue-500 rounded-full ml-auto"></div>
+              )}
+            </>
           )}
         </div>
-      );
-    }
-
-    return (
-      <div key={node.path} className="flex items-center py-1 px-2 hover:bg-slate-700/30 rounded">
-        <div className="w-6 mr-1 flex-shrink-0" />
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => toggleFileSelection(node.path)}
-          className="mr-2 rounded accent-blue-500 flex-shrink-0"
-        />
-        <DocumentIcon className="w-4 h-4 text-blue-400 mr-2 flex-shrink-0" />
-        <label 
-          className="text-slate-300 text-sm cursor-pointer truncate flex-1 min-w-0"
-          onClick={() => toggleFileSelection(node.path)}
-          title={node.name} // Add tooltip for full name
-        >
-          {node.name}
-        </label>
+        
+        {node.type === 'folder' && isExpanded && node.items && (
+          <div className="ml-4">
+            {node.items.map(child => renderNode(child, level + 1, currentPath))}
+          </div>
+        )}
       </div>
     );
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+        <span className="ml-2 text-gray-400">Loading {technologyType} folder...</span>
+      </div>
+    );
+  }
+
   return (
-    // WIDER CONTAINER - increased from default to w-80 (320px) or w-96 (384px)
-    <div className="w-80 bg-slate-900 border border-slate-700 rounded-lg flex-shrink-0">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-700 bg-slate-800 rounded-t-lg">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">📁 File Explorer</h3>
-          {selectedFiles.length > 0 && (
-            <span className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs flex-shrink-0">
-              {selectedFiles.length} selected
-            </span>
-          )}
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+          📁 {technologyType === 'chef' ? '👨‍🍳' : 
+               technologyType === 'bladelogic' ? '⚔️' :
+               technologyType === 'puppet' ? '🎭' :
+               technologyType === 'ansible' ? '📜' : '🏗️'} 
+          /{technologyType}/ folder
+        </h4>
+        <div className="text-xs text-gray-500">
+          {filteredFiles.length} files
         </div>
       </div>
 
-      {/* Tree - increased height and improved scrolling */}
-      <div className="p-3 h-80 overflow-y-auto">
-        {loading ? (
-          <div className="text-slate-500 text-center py-8">Loading files...</div>
-        ) : tree.length === 0 ? (
-          <div className="text-slate-500 text-center py-8">No files found</div>
+      {/* Selection controls */}
+      {filteredFiles.length > 0 && (
+        <div className="flex gap-2">
+          <button
+            onClick={selectAllFiles}
+            disabled={selectedFiles.length === filteredFiles.length}
+            className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded hover:bg-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Select All ({filteredFiles.length})
+          </button>
+          {selectedFiles.length > 0 && (
+            <button
+              onClick={clearSelection}
+              className="text-xs px-2 py-1 bg-gray-600/20 text-gray-300 rounded hover:bg-gray-600/30"
+            >
+              Clear ({selectedFiles.length})
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* File tree */}
+      <div className="bg-gray-800/30 rounded-lg border border-gray-700/50 max-h-64 overflow-y-auto rh-scrollbar">
+        {treeData.length > 0 ? (
+          <div className="p-2">
+            {treeData.map(node => renderNode(node))}
+          </div>
         ) : (
-          <div className="space-y-1">
-            {tree.map(renderTreeNode)}
+          <div className="p-4 text-center text-gray-500">
+            <FolderIcon className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+            <p className="text-sm">No /{technologyType}/ folder found</p>
+            <p className="text-xs text-gray-600 mt-1">
+              Upload files to uploads/{technologyType}/ to see them here
+            </p>
           </div>
         )}
       </div>
 
-      {/* Selected Files List - improved scrolling and layout */}
+      {/* Selection summary */}
       {selectedFiles.length > 0 && (
-        <div className="border-t border-slate-700 p-3">
-          <div className="text-xs font-medium text-slate-400 mb-2">Selected Files:</div>
-          <div className="space-y-1 max-h-24 overflow-y-auto">
-            {selectedFiles.map(file => (
-              <div key={file} className="flex items-center justify-between text-xs">
-                <span 
-                  className="text-slate-300 truncate flex-1 min-w-0 mr-2" 
-                  title={file} // Add tooltip for full path
-                >
-                  {file}
-                </span>
-                <button
-                  onClick={() => {
-                    const newSelection = selectedFiles.filter(f => f !== file);
-                    setSelectedFiles(newSelection);
-                  }}
-                  className="text-red-400 hover:text-red-300 flex-shrink-0 w-4 h-4 flex items-center justify-center"
-                >
-                  ×
-                </button>
+        <div className="bg-blue-900/20 rounded-lg p-3 border border-blue-500/30">
+          <div className="text-sm text-blue-300 font-medium mb-1">
+            Selected Files ({selectedFiles.length})
+          </div>
+          <div className="space-y-1 max-h-20 overflow-y-auto rh-scrollbar">
+            {selectedFiles.slice(0, 3).map(file => (
+              <div key={file} className="text-xs text-gray-400 truncate">
+                📄 {file}
               </div>
             ))}
+            {selectedFiles.length > 3 && (
+              <div className="text-xs text-gray-500">
+                ... and {selectedFiles.length - 3} more files
+              </div>
+            )}
           </div>
         </div>
       )}

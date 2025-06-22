@@ -2,13 +2,13 @@
 
 import React, { Suspense, useEffect, useState, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import ContextPanel from "@/components/ContextPanel";
 import ContextSidebar from "@/components/ContextSidebar";
 import WorkflowSidebar from "@/components/WorkflowSidebar";
-import ClassificationPanel from "@/components/ClassificationPanel";
+import AnalysisPanel from "@/components/analyse";
 import AgentLogPanel from "@/components/AgentLogPanel";
 import ThemeToggle from "@/components/ThemeToggle";
 import GatedProgressSteps from "@/components/GatedProgressSteps";
@@ -21,46 +21,33 @@ import DeploymentSidebar from "@/components/DeploymentSidebar";
 
 import { useFileOperations } from "@/hooks/useFileOperations";
 import { useGitOperations } from "@/hooks/useGitOperations";
-import { useClassification } from "@/hooks/useClassification";
-import { ClassificationResponse } from "@/types/api";
+import { useChefAnalyse } from "@/hooks/analyse/chef/useChefAnalyse";
+import { useBladeLogicAnalyse } from "@/hooks/analyse/bladelogic/useBladeLogicAnalyse";
+
+import { BackendAnalysisResponse } from "@/components/analyse/types/BackendTypes";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://host.containers.internal:8000";
 const steps = ["Analyze", "Context", "Convert", "Validate", "Deploy"];
 
-interface ValidationResult {
-  errors?: unknown[];
-  warnings?: unknown[];
-  status?: string;
-  [key: string]: unknown;
-}
-
 function RunWorkflowPageInner() {
-  // ========================================
-  // 1. ALL REACT HOOKS MUST BE DECLARED FIRST
-  // NO CONDITIONAL LOGIC BEFORE HOOKS
-  // ========================================
-  
+  // State declarations (unchanged)
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Core navigation state
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [showAgentLog, setShowAgentLog] = useState(false);
 
-  // File and source management state
   const [sourceType, setSourceType] = useState<"upload" | "existing" | "git">("upload");
   const [uploadKey, setUploadKey] = useState(Date.now());
   const [code, setCode] = useState("");
-  const [analysisFiles, setAnalysisFiles] = useState<Record<string, string>>({}); // NEW: Preserve analyzed files
+  const [analysisFiles, setAnalysisFiles] = useState<Record<string, string>>({});
   const [selectedFile, setSelectedFile] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
   const [folderList, setFolderList] = useState<string[]>([]);
   const [fileList, setFileList] = useState<string[]>([]);
-
-  // Git operations state
   const [gitUrl, setGitUrl] = useState("");
   const [gitRepoName, setGitRepoName] = useState("");
   const [gitFolderList, setGitFolderList] = useState<string[]>([]);
@@ -68,23 +55,22 @@ function RunWorkflowPageInner() {
   const [selectedGitFolder, setSelectedGitFolder] = useState("");
   const [selectedGitFile, setSelectedGitFile] = useState("");
 
-  // Logging state
   const [logMessages, setLogMessages] = useState<string[]>([]);
-
-  // Classification and workflow results
-  const [classificationResult, setClassificationResult] = useState<ClassificationResponse | undefined>(undefined);
+  const [analysisResult, setAnalysisResult] = useState<BackendAnalysisResponse | undefined>(undefined);
   const [retrievedContext, setRetrievedContext] = useState<string>("");
   const [generatedPlaybook, setGeneratedPlaybook] = useState<string>("");
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [validationResult, setValidationResult] = useState<any>(null);
 
-  // Configuration state for different workflow steps
+  // Only the auto-detect is kept
+  const [technologyType, setTechnologyType] = useState<"chef" | "bladelogic">("chef");
+
+  // Config states (unchanged)
   const [contextConfig, setContextConfig] = useState({
     includeComments: false,
     analyzeDependencies: true,
     environmentType: 'development' as 'development' | 'staging' | 'production',
     scanDepth: 'medium' as 'shallow' | 'medium' | 'deep'
   });
-
   const [conversionConfig, setConversionConfig] = useState({
     targetFormat: 'ansible' as 'ansible' | 'terraform' | 'docker' | 'kubernetes',
     outputStyle: 'detailed' as 'minimal' | 'detailed' | 'enterprise',
@@ -94,7 +80,6 @@ function RunWorkflowPageInner() {
     useRoles: false,
     useVars: false
   });
-
   const [validationConfig, setValidationConfig] = useState({
     checkSyntax: true,
     securityScan: true,
@@ -102,7 +87,6 @@ function RunWorkflowPageInner() {
     bestPractices: true,
     customRules: [] as string[]
   });
-
   const [deploymentConfig, setDeploymentConfig] = useState({
     environment: 'development' as 'development' | 'staging' | 'production',
     deploymentMode: 'direct' as 'aap' | 'direct',
@@ -111,226 +95,149 @@ function RunWorkflowPageInner() {
     notifications: true
   });
 
-  // Utility functions - ALL useCallback hooks MUST be declared here
-  const addLogMessage = useCallback((msg: string) => {
-    setLogMessages(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  }, []);
-
-  const addSidebarMessage = useCallback((msg: string) => {
-    console.warn('Sidebar message:', msg);
-  }, []);
-
+  // Utility functions (unchanged)
+  const addLogMessage = useCallback((msg: string) =>
+    setLogMessages(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]), []);
+  const addSidebarMessage = useCallback((msg: string) => { console.warn('Sidebar message:', msg); }, []);
   const markStepAsCompleted = useCallback((stepIndex: number) => {
-    setCompletedSteps(prev => {
-      if (!prev.includes(stepIndex)) {
-        return [...prev, stepIndex].sort((a, b) => a - b);
-      }
-      return prev;
-    });
+    setCompletedSteps(prev => (!prev.includes(stepIndex) ? [...prev, stepIndex].sort((a, b) => a - b) : prev));
   }, []);
-
+  // === FIX: Unlock Deploy step after Validate ===
   const handleStepClick = useCallback((stepIndex: number) => {
-    const isAccessible = stepIndex === 0 ||
+    const isAccessible =
+      stepIndex === 0 ||
       completedSteps.includes(stepIndex) ||
       stepIndex === step ||
-      (stepIndex === step + 1 && completedSteps.includes(step));
+      (stepIndex === step + 1 && completedSteps.includes(step)) ||
+      (stepIndex === 4 && completedSteps.includes(3)); // Unlock Deploy after Validate
+
     if (isAccessible && !loading) {
       setStep(stepIndex);
       setLogMessages([]);
     }
   }, [completedSteps, step, loading]);
+  // === END FIX ===
 
-  const handleValidationComplete = useCallback((result: ValidationResult) => {
-    setValidationResult(result);
-    if (result && (!result.errors || (Array.isArray(result.errors) && result.errors.length === 0))) {
-      markStepAsCompleted(3);
-      addLogMessage("Validation completed successfully - ready for deployment");
-    }
-  }, [markStepAsCompleted, addLogMessage]);
-
-  const onContextRetrieved = useCallback((context: string) => {
-    setRetrievedContext(context);
-    markStepAsCompleted(1);
-  }, [markStepAsCompleted]);
-
-  const onGenerateComplete = useCallback((playbook: string) => {
-    setGeneratedPlaybook(playbook);
-    markStepAsCompleted(2);
-    addLogMessage("Playbook generated and ready for validation");
-  }, [markStepAsCompleted, addLogMessage]);
-
-  const onDeploymentComplete = useCallback((_result: ValidationResult) => {
-    markStepAsCompleted(4);
-    addLogMessage("Deployment completed successfully!");
-  }, [markStepAsCompleted, addLogMessage]);
-
-  // NEW: Store analyzed files for context step
-  const handleAnalysisComplete = useCallback((files: Record<string, string>) => {
-    setAnalysisFiles(files);
-    addLogMessage(`Analysis files preserved: ${Object.keys(files).length} files (${Object.values(files).reduce((sum, content) => sum + content.length, 0)} characters total)`);
-  }, [addLogMessage]);
-
-  // Custom hooks - ALL MUST BE DECLARED BEFORE ANY CONDITIONAL LOGIC
+  // Custom hooks (unchanged)
   const { fetchFolders, fetchFilesInFolder, fetchFileContent, handleUpload } = useFileOperations({
-    BACKEND_URL,
-    setFolderList,
-    setFileList,
-    setCode,
-    setSelectedFile,
-    setUploadKey,
-    addLogMessage,
-    addSidebarMessage,
-    gitRepoName,
-    setLoading
+    BACKEND_URL, setFolderList, setFileList, setCode, setSelectedFile, setUploadKey, addLogMessage, addSidebarMessage, gitRepoName, setLoading
   });
-
   const { handleCloneRepo, fetchGitFiles, fetchGitFileContent } = useGitOperations({
-    BACKEND_URL,
-    gitUrl,
-    setGitRepoName,
-    setGitFolderList,
-    setGitFileList,
-    setCode,
-    setSelectedGitFile,
-    addLogMessage,
-    addSidebarMessage,
-    setLoading
+    BACKEND_URL, gitUrl, setGitRepoName, setGitFolderList, setGitFileList, setCode, setSelectedGitFile, addLogMessage, addSidebarMessage, setLoading
   });
-
-  const { classifyCode } = useClassification({
+  const { analyseChef } = useChefAnalyse({
     BACKEND_URL,
     files: {},
-    setClassificationResult: useCallback((result) => {
-      try {
-        setClassificationResult(result ?? undefined);
-        if (result && !(result as Record<string, unknown>).error) {
-          markStepAsCompleted(0);
-          addLogMessage("Analysis completed - ready for next step");
-        }
-      } catch (error) {
-        console.error('Error setting classification result:', error);
-        addLogMessage(`Error processing analysis result: ${error}`);
+    setAnalysisResult: useCallback((result) => {
+      setAnalysisResult(result);
+      if (result && result.success !== false) {
+        markStepAsCompleted(0);
+        addLogMessage(" Chef analysis completed - ready for next step");
       }
     }, [markStepAsCompleted, addLogMessage]),
-    setStep,
-    step,
     setLoading,
-    loading,
+    addLog: addLogMessage
+  });
+  const { analyseBladeLogic } = useBladeLogicAnalyse({
+    BACKEND_URL,
+    files: {},
+    setAnalysisResult: useCallback((result) => {
+      setAnalysisResult(result);
+      if (result && result.success !== false) {
+        markStepAsCompleted(0);
+        addLogMessage(" BladeLogic analysis completed - ready for next step");
+      }
+    }, [markStepAsCompleted, addLogMessage]),
+    setLoading,
     addLog: addLogMessage
   });
 
-  // UPDATED: Enhanced multi-file classification with analysis preservation
-  const handleManualClassify = useCallback((files?: { path: string; content: string }[]) => {
+  // --- SMART TECHNOLOGY DETECTION ---
+  const detectTechnologyType = (files: { path: string; content: string }[]): "chef" | "bladelogic" => {
+    if (files.some(f => f.path.endsWith('.sh') || /bladelogic|rscd/i.test(f.content))) {
+      return "bladelogic";
+    }
+    return "chef";
+  };
+
+  // --- MAIN ANALYSIS TRIGGER ---
+  const handleManualClassify = useCallback((files?: { path: string; content: string }[], technology?: "chef" | "bladelogic") => {
     if (loading) {
-      addLogMessage("Classification already in progress");
+      addLogMessage("Analysis already in progress");
       return;
     }
+    let detectedTech: "chef" | "bladelogic" = technologyType;
+    let filesObj: Record<string, string> = {};
 
-    try {
-      if (files && files.length > 0) {
-        const filesObj: Record<string, string> = {};
-        files.forEach(f => {
-          if (f.path && f.content) {
-            filesObj[f.path] = f.content;
-          }
-        });
-
-        if (Object.keys(filesObj).length === 0) {
-          addLogMessage("No valid files found for analysis");
-          return;
-        }
-
-        // PRESERVE the analyzed files for context step
-        handleAnalysisComplete(filesObj);
-
-        addLogMessage(`Selected ${files.length} files: ${Object.keys(filesObj).join(", ")}`);
-        addLogMessage(`Total size: ${Object.values(filesObj).reduce((sum, c) => sum + c.length, 0)} characters`);
-
-        setTimeout(() => {
-          classifyCode(filesObj);
-        }, 200);
-
+    if (files && files.length > 0) {
+      filesObj = {};
+      files.forEach(f => {
+        if (f.path && f.content) filesObj[f.path] = f.content;
+      });
+      if (Object.keys(filesObj).length === 0) {
+        addLogMessage("No valid files found for analysis");
         return;
       }
-
-      if (!code.trim()) {
-        addLogMessage("No code loaded. Please select or upload a file first");
-        return;
-      }
-      
-      // For single file, also preserve in structured format
-      const singleFileObj = { "input_file": code };
-      handleAnalysisComplete(singleFileObj);
-      
-      addLogMessage("Starting single file analysis...");
-      classifyCode(singleFileObj);
-    } catch (error) {
-      console.error('Error in manual classification:', error);
-      addLogMessage(`Classification error: ${error}`);
+      setAnalysisFiles(filesObj);
+      addLogMessage(`Selected ${files.length} files: ${Object.keys(filesObj).join(", ")}`);
+      addLogMessage(`Total size: ${Object.values(filesObj).reduce((sum, c) => sum + c.length, 0)} characters`);
+      detectedTech = technology || detectTechnologyType(files);
+      setTechnologyType(detectedTech);
+    } else if (code.trim()) {
+      const fileName = selectedFile || selectedGitFile || "uploaded_file";
+      filesObj = { [fileName]: code };
+      setAnalysisFiles(filesObj);
+      addLogMessage(`Starting single file analysis...`);
+      detectedTech = technology || detectTechnologyType([{ path: fileName, content: code }]);
+      setTechnologyType(detectedTech);
+    } else {
+      addLogMessage("No code loaded. Please select or upload a file first");
+      return;
     }
-  }, [loading, addLogMessage, code, classifyCode, handleAnalysisComplete]);
+    if (detectedTech === "bladelogic") {
+      analyseBladeLogic(filesObj);
+    } else {
+      analyseChef(filesObj);
+    }
+  }, [loading, addLogMessage, code, analyseChef, analyseBladeLogic, selectedFile, selectedGitFile, technologyType]);
 
-  // ALL useEffect hooks MUST be declared here
+  // --- Mark Convert step completed when playbook is generated ---
+  const handleGenerateComplete = useCallback((playbook: string) => {
+    setGeneratedPlaybook(playbook);
+    markStepAsCompleted(2);
+    addLogMessage("Playbook generated and ready for validation");
+  }, [setGeneratedPlaybook, markStepAsCompleted, addLogMessage]);
+
+  // --- UI EFFECTS ---
   useEffect(() => {
     if (status === "unauthenticated") {
       const t = setTimeout(() => router.replace("/"), 2000);
       return () => clearTimeout(t);
     }
   }, [status, router]);
+  useEffect(() => { if (sourceType === "existing") fetchFolders(); }, [sourceType, gitRepoName, fetchFolders]);
+  useEffect(() => { if (retrievedContext && !completedSteps.includes(1)) markStepAsCompleted(1); }, [retrievedContext, completedSteps, markStepAsCompleted]);
 
-  useEffect(() => {
-    if (sourceType === "existing") {
-      fetchFolders();
-    }
-  }, [sourceType, gitRepoName, fetchFolders]);
-
-  useEffect(() => {
-    if (retrievedContext && !completedSteps.includes(1)) {
-      markStepAsCompleted(1);
-    }
-  }, [retrievedContext, completedSteps, markStepAsCompleted]);
-
-  // ========================================
-  // 2. NOW WE CAN HAVE CONDITIONAL LOGIC AND EARLY RETURNS
-  // ALL HOOKS HAVE BEEN DECLARED ABOVE
-  // ========================================
-
-  // Check admin privileges
+  // --- ADMIN LOGIC ---
   const allowedEmails = ["rbanda@redhat.com"];
   const isAdmin = (session?.user?.email && allowedEmails.includes(session.user.email)) ||
-                  process.env.NODE_ENV === "development";
-
+    process.env.NODE_ENV === "development";
   const currentWorkflow = searchParams?.get('workflow') || 'x2ansible';
 
-  // Early returns are now safe
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  // --- RENDER ---
+  if (status === "loading") return (<div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center"><div className="text-center"><div className="animate-spin h-8 w-8 border-4 border-red-600 border-t-transparent rounded-full mx-auto mb-4"></div><p className="text-gray-600 dark:text-gray-400">Loading...</p></div></div>);
+  if (status === "unauthenticated") return (<div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center"><div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 text-center"><p className="mb-4 text-gray-800 dark:text-gray-200 font-semibold">Please log in to access this page</p><p className="text-sm text-gray-600 dark:text-gray-400">Redirecting to login...</p></div></div>);
 
-  if (status === "unauthenticated") {
-    return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 text-center">
-          <p className="mb-4 text-gray-800 dark:text-gray-200 font-semibold">Please log in to access this page</p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Redirecting to login...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Main component render
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       {/* Header */}
       <div className="flex justify-between items-center mb-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Convert to Ansible - Step by Step</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Convert to Ansible - Step by Step
+          </h1>
+          {/* Technology badge removed */}
+        </div>
         <div className="flex items-center gap-4">
           <ThemeToggle />
           <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -375,7 +282,7 @@ function RunWorkflowPageInner() {
       {/* === 3-PANEL LAYOUT === */}
       <div className="x2a-3panel-layout">
         {/* LEFT SIDEBAR */}
-        <div className="x2a-side-panel">
+        <div className="x2a-side-panel rh-scrollbar overflow-auto">
           {step === 1 ? (
             <ContextSidebar
               vectorDbId="iac"
@@ -460,23 +367,23 @@ function RunWorkflowPageInner() {
               code={code}
               analysisFiles={analysisFiles}
               onLogMessage={addLogMessage}
-              onContextRetrieved={onContextRetrieved}
+              onContextRetrieved={setRetrievedContext}
             />
           ) : step === 2 ? (
             <GeneratePanel
               code={code}
               analysisFiles={analysisFiles}
               context={retrievedContext}
-              classificationResult={classificationResult}
+              classificationResult={analysisResult}
               onLogMessage={addLogMessage}
-              onComplete={onGenerateComplete}
+              onComplete={handleGenerateComplete}
             />
           ) : step === 3 ? (
             <ValidationPanel
               playbook={generatedPlaybook}
               validationConfig={validationConfig}
               onLogMessage={addLogMessage}
-              onValidationComplete={handleValidationComplete}
+              onValidationComplete={setValidationResult}
             />
           ) : step === 4 ? (
             <DeploymentPanel
@@ -500,11 +407,11 @@ function RunWorkflowPageInner() {
                 notifications: deploymentConfig.notifications
               }}
               onLogMessage={addLogMessage}
-              onComplete={onDeploymentComplete}
+              onComplete={() => markStepAsCompleted(4)}
             />
           ) : (
-            <ClassificationPanel
-              classificationResult={classificationResult}
+            <AnalysisPanel
+              result={analysisResult}
               selectedFile={selectedFile}
               selectedGitFile={selectedGitFile}
               code={code}
