@@ -1,4 +1,4 @@
-// WorkflowSidebar.tsx - Fixed with proper analyze button placement
+// WorkflowSidebar.tsx - Complete working code with Ansible Upgrade support
 "use client";
 
 import { ChangeEvent, FormEvent, useState } from "react";
@@ -79,12 +79,14 @@ export default function WorkflowSidebar(props: WorkflowSidebarProps) {
   // Technology selection state
   const [selectedTechnology, setSelectedTechnology] = useState<string>("chef");
 
-  // Technology options
+  // Technology options - UPDATED: Added Ansible Upgrade support
   const technologies = [
     { id: "chef", name: "Chef", icon: "👨‍🍳", description: "Chef cookbooks and recipes" },
     { id: "bladelogic", name: "BladeLogic", icon: "⚔️", description: "BMC BladeLogic automation" },
     { id: "puppet", name: "Puppet", icon: "🎭", description: "Puppet manifests and modules" },
-    { id: "ansible", name: "Ansible", icon: "📜", description: "Ansible playbooks" },
+    { id: "shell", name: "Shell Scripts", icon: "🐚", description: "Shell scripts and automation" },
+    { id: "salt", name: "Salt", icon: "🧂", description: "SaltStack states and formulas" },
+    { id: "ansible-upgrade", name: "Ansible Upgrade", icon: "🔄", description: "Upgrade existing Ansible code" },
     { id: "terraform", name: "Terraform", icon: "🏗️", description: "Terraform configurations" }
   ];
 
@@ -347,7 +349,7 @@ ${file.content}`)
     );
   }
 
-  // Steps 1-4 remain the same...
+  // Step 1: Context Configuration
   if (currentStep === 1) {
     return (
       <SidebarWrapper title="📋 Context Configuration">
@@ -448,7 +450,7 @@ ${file.content}`)
   // Step 3: Validation Config
   if (currentStep === 3) {
     return (
-      <SidebarWrapper title="Validation Settings">
+      <SidebarWrapper title=" Validation Settings">
         <div className="space-y-4">
           <div>
             <label className="flex items-center gap-2 text-sm text-gray-300">
@@ -472,7 +474,7 @@ ${file.content}`)
   // Step 4: Deployment Config
   if (currentStep === 4) {
     return (
-      <SidebarWrapper title="Deployment Settings">
+      <SidebarWrapper title="🚀 Deployment Settings">
         <div className="space-y-4">
           <div>
             <label className="block text-sm text-gray-300 mb-2">Deployment Target</label>

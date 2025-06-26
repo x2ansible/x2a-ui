@@ -24,7 +24,11 @@ import {
   MagnifyingGlassIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
-  ClipboardDocumentIcon
+  ClipboardDocumentIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  DocumentIcon,
+  FolderIcon
 } from "@heroicons/react/24/outline";
 
 interface ContextPanelProps {
@@ -57,6 +61,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
   const [hasQueried, setHasQueried] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedChunks, setExpandedChunks] = useState<Set<number>>(new Set());
+  const [isCodeSectionExpanded, setIsCodeSectionExpanded] = useState(false);
   const hasLoggedInit = useRef(false);
 
   // For animated "Copied!" feedback
@@ -281,7 +286,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
       const duration = Date.now() - startTime;
       const errorMessage = err?.message || "Unknown error in context discovery";
       setError(errorMessage);
-      logMessage(` Context discovery failed after ${duration}ms: ${errorMessage}`);
+      logMessage(`❌ Context discovery failed after ${duration}ms: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -327,126 +332,239 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
     },
   };
 
-  // --- Enhanced context card render with modern design ---
+  // --- Glass Morphism Catalog Cards ---
   const renderResults = () => {
     if (!result) return null;
     const patterns = result.context || [];
     if (!patterns.length) {
       return (
         <div className="text-center py-16">
-          <div className="w-16 h-16 bg-gradient-to-br from-slate-600 to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <MagnifyingGlassIcon className="w-8 h-8 text-slate-400" />
+          <div className="w-20 h-20 glassmorphism-card rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
+            <MagnifyingGlassIcon className="w-10 h-10 text-white/70" />
           </div>
-          <p className="text-slate-400 text-lg font-medium">No Conversion Patterns Found</p>
-          <p className="text-slate-500 text-sm mt-1">Try adjusting your search criteria or check your knowledge base</p>
+          <p className="text-white/80 text-xl font-medium mb-2">No Conversion Patterns Found</p>
+          <p className="text-white/50 text-sm">Discover patterns from your knowledge base</p>
         </div>
       );
     }
 
     return (
-      <div className="context-results space-y-6">
-        {patterns.map((item, i) => {
-          const isExpanded = expandedChunks.has(i);
-          const lines = item.text?.split("\n") || [];
-          const preview =
-            lines.slice(0, 12).join("\n").slice(0, 800) +
-            ((lines.length > 12 || (item.text?.length ?? 0) > 800) ? "\n\n..." : "");
-          const hasMore = lines.length > 12 || (item.text?.length ?? 0) > 800;
+      <div className="patterns-catalog">
+        <div className="mb-6">
+          <h3 className="text-white/90 text-lg font-semibold mb-2">📚 Conversion Pattern Library</h3>
+          <p className="text-white/60 text-sm">Click any pattern card to explore implementation details</p>
+        </div>
+        
+        {/* Glass Catalog Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {patterns.map((item, i) => {
+            const isExpanded = expandedChunks.has(i);
+            const lines = item.text?.split("\n") || [];
+            const preview = lines.slice(0, 6).join("\n").slice(0, 400) + 
+              ((lines.length > 6 || (item.text?.length ?? 0) > 400) ? "\n..." : "");
+            const hasMore = lines.length > 6 || (item.text?.length ?? 0) > 400;
 
-          // Enhanced gradient borders with more variety
-          const borderGradients = [
-            "from-cyan-400 via-blue-500 to-indigo-600",
-            "from-pink-400 via-violet-500 to-purple-600", 
-            "from-emerald-400 via-cyan-500 to-teal-600",
-            "from-yellow-400 via-orange-500 to-red-500",
-            "from-indigo-400 via-purple-500 to-pink-600"
-          ];
-          const borderClass = borderGradients[i % borderGradients.length];
+            // Pattern type detection for better categorization
+            const patternType = item.type || 
+              (item.text.includes('package') ? 'Package Management' :
+               item.text.includes('service') ? 'Service Management' :
+               item.text.includes('file') ? 'File Operations' :
+               item.text.includes('template') ? 'Configuration' :
+               'General Pattern');
 
-          return (
-            <div
-              key={i}
-              className="group relative rounded-2xl overflow-hidden shadow-2xl hover:shadow-cyan-500/10 transition-all duration-300 transform hover:-translate-y-1"
-              style={{ 
-                background: "linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(51, 65, 85, 0.8) 100%)", 
-                backdropFilter: "blur(10px)",
-                border: "1px solid rgba(148, 163, 184, 0.1)"
-              }}
-            >
-              {/* Enhanced gradient border */}
-              <div className={`absolute left-0 top-0 h-full w-1 bg-gradient-to-b ${borderClass} opacity-80 group-hover:opacity-100 group-hover:w-1.5 transition-all duration-300`} />
-              
-              <div className="relative p-6">
-                {/* Enhanced Pattern Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 bg-gradient-to-br ${borderClass} rounded-xl flex items-center justify-center shadow-lg`}>
-                      <span className="text-white text-lg font-bold">{i + 1}</span>
-                    </div>
-                    <div>
-                      <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                        🔍 Pattern {i + 1}
-                        {/* Enhanced metadata pills */}
-                        {item.type && (
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-400/30 text-blue-300">
-                            {item.type}
+            // Glass card color themes
+            const glassThemes = [
+              { 
+                bg: "rgba(59, 130, 246, 0.1)", 
+                border: "rgba(59, 130, 246, 0.2)",
+                accent: "from-blue-400 to-cyan-400",
+                icon: "🔧"
+              },
+              { 
+                bg: "rgba(168, 85, 247, 0.1)", 
+                border: "rgba(168, 85, 247, 0.2)",
+                accent: "from-purple-400 to-pink-400",
+                icon: "⚙️"
+              },
+              { 
+                bg: "rgba(34, 197, 94, 0.1)", 
+                border: "rgba(34, 197, 94, 0.2)",
+                accent: "from-emerald-400 to-teal-400",
+                icon: "📦"
+              },
+              { 
+                bg: "rgba(251, 146, 60, 0.1)", 
+                border: "rgba(251, 146, 60, 0.2)",
+                accent: "from-orange-400 to-amber-400",
+                icon: "🚀"
+              },
+              { 
+                bg: "rgba(236, 72, 153, 0.1)", 
+                border: "rgba(236, 72, 153, 0.2)",
+                accent: "from-pink-400 to-rose-400",
+                icon: "✨"
+              }
+            ];
+            const theme = glassThemes[i % glassThemes.length];
+
+            return (
+              <div
+                key={i}
+                className={`glass-pattern-card group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.02] ${
+                  isExpanded ? 'xl:col-span-2' : ''
+                }`}
+                style={{
+                  background: `linear-gradient(135deg, ${theme.bg}, rgba(255,255,255,0.05))`,
+                  backdropFilter: "blur(20px)",
+                  WebkitBackdropFilter: "blur(20px)",
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: "24px",
+                  boxShadow: `
+                    0 8px 32px rgba(0,0,0,0.3),
+                    inset 0 1px 0 rgba(255,255,255,0.1),
+                    0 0 0 1px rgba(255,255,255,0.05)
+                  `
+                }}
+                onClick={() => toggleChunkExpansion(i)}
+              >
+                {/* Glass shine effect */}
+                <div 
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(255,255,255,0.05) 100%)"
+                  }}
+                />
+                
+                {/* Floating accent orb */}
+                <div 
+                  className={`absolute -top-6 -right-6 w-24 h-24 bg-gradient-to-br ${theme.accent} rounded-full opacity-20 group-hover:opacity-30 transition-opacity duration-500 blur-xl`}
+                />
+                
+                <div className="relative p-6">
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      {/* Pattern Icon */}
+                      <div 
+                        className={`w-12 h-12 bg-gradient-to-br ${theme.accent} rounded-2xl flex items-center justify-center text-2xl shadow-lg backdrop-blur-sm`}
+                        style={{
+                          background: `linear-gradient(135deg, ${theme.bg}, rgba(255,255,255,0.1))`,
+                          border: `1px solid ${theme.border}`
+                        }}
+                      >
+                        {theme.icon}
+                      </div>
+                      
+                      {/* Pattern Info */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-white font-semibold text-base">
+                            Pattern #{i + 1}
+                          </h4>
+                          <span 
+                            className="px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm"
+                            style={{
+                              background: theme.bg,
+                              border: `1px solid ${theme.border}`,
+                              color: "rgba(255,255,255,0.9)"
+                            }}
+                          >
+                            {patternType}
                           </span>
-                        )}
+                        </div>
+                        <p className="text-white/60 text-sm">
+                          {item.text.length.toLocaleString()} characters • {lines.length} lines
+                        </p>
                         {item.source && (
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-400/30 text-emerald-300">
-                            {item.source}
-                          </span>
+                          <p className="text-white/50 text-xs mt-1">
+                            Source: {item.source}
+                          </p>
                         )}
-                      </h3>
-                      <p className="text-slate-400 text-sm mt-0.5">
-                        {item.text.length.toLocaleString()} characters
-                      </p>
+                      </div>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyWithFeedback(item.text, i);
+                        }}
+                        className="p-2 text-white/60 hover:text-white transition-all duration-200 hover:scale-110 backdrop-blur-sm rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.1)",
+                          border: "1px solid rgba(255,255,255,0.1)"
+                        }}
+                        title="Copy pattern"
+                      >
+                        <ClipboardDocumentIcon className="w-5 h-5" />
+                        {copiedIndex === i && (
+                          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-green-500/90 backdrop-blur-sm text-white text-xs rounded-lg font-medium animate-fade-in border border-green-400/30">
+                            Copied!
+                          </div>
+                        )}
+                      </button>
+                      
+                      {hasMore && (
+                        <div className="p-2 text-white/40">
+                          {isExpanded ? (
+                            <ChevronDownIcon className="w-5 h-5" />
+                          ) : (
+                            <ChevronRightIcon className="w-5 h-5" />
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
-                  {/* Enhanced action buttons */}
-                  <div className="flex items-center gap-2">
-                    {hasMore && (
-                      <button
-                        className="px-3 py-1.5 text-xs font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-400/50 rounded-lg transition-all duration-200"
-                        onClick={() => toggleChunkExpansion(i)}
+                  {/* Pattern Content Preview */}
+                  <div 
+                    className="relative rounded-2xl overflow-hidden backdrop-blur-sm"
+                    style={{
+                      background: "rgba(0,0,0,0.2)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      maxHeight: isExpanded ? "500px" : "240px"
+                    }}
+                  >
+                    <div className="p-4 overflow-y-auto custom-scrollbar">
+                      <div className="prose prose-invert prose-sm max-w-none text-white/90 text-sm leading-relaxed">
+                        <ReactMarkdown components={markdownComponents}>
+                          {isExpanded || !hasMore ? item.text : preview}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                    
+                    {/* Expand hint overlay */}
+                    {!isExpanded && hasMore && (
+                      <div 
+                        className="absolute bottom-0 left-0 right-0 h-12 flex items-end justify-center pb-2"
+                        style={{
+                          background: "linear-gradient(transparent, rgba(0,0,0,0.6))"
+                        }}
                       >
-                        {isExpanded ? "Show Less" : "Show More"}
-                      </button>
+                        <span className="text-white/60 text-xs font-medium">
+                          Click to expand full pattern
+                        </span>
+                      </div>
                     )}
-                    <button
-                      onClick={() => handleCopyWithFeedback(item.text, i)}
-                      className="relative p-2 text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-600/50 rounded-lg transition-all duration-200 hover:scale-105"
-                      title="Copy to clipboard"
-                    >
-                      <ClipboardDocumentIcon className="w-4 h-4" />
-                      {copiedIndex === i && (
-                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-green-500 text-white text-xs rounded-md font-medium animate-fade-in">
-                          Copied!
-                        </div>
-                      )}
-                    </button>
                   </div>
-                </div>
-                
-                {/* Enhanced content area with better styling */}
-                <div
-                  className="bg-gradient-to-br from-slate-900/60 to-slate-800/60 rounded-xl p-4 border border-slate-600/20 backdrop-blur-sm"
-                  style={{
-                    maxHeight: isExpanded ? 600 : 320,
-                    overflowY: isExpanded || hasMore ? 'auto' : 'visible',
-                  }}
-                >
-                  <div className="prose prose-invert prose-sm max-w-none context-markdown text-slate-200">
-                    <ReactMarkdown components={markdownComponents}>
-                      {isExpanded || !hasMore ? item.text : preview}
-                    </ReactMarkdown>
+                  
+                  {/* Pattern Stats */}
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                    <div className="flex items-center gap-4 text-xs text-white/50">
+                      <span>📄 {lines.length} lines</span>
+                      <span>🔤 {item.text.length} chars</span>
+                      {item.type && <span>🏷️ {item.type}</span>}
+                    </div>
+                    <div className="text-xs text-white/40">
+                      {isExpanded ? 'Click to collapse' : 'Click to expand'}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     );
   };
@@ -458,53 +576,83 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl shadow-2xl border border-slate-700/50 backdrop-blur-sm context-panel-outer">
-      {/* Enhanced Header with gradient and better spacing */}
-      <div className="flex items-center justify-between p-6 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/80 to-slate-700/80 rounded-t-2xl">
+      {/* Compact Header with better spacing */}
+      <div className="flex items-center justify-between p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/80 to-slate-700/80 rounded-t-2xl">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-lg">
-            <MagnifyingGlassIcon className="w-6 h-6 text-white" />
+            <MagnifyingGlassIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-white font-bold text-xl tracking-tight">Context Discovery</h2>
-            <p className="text-slate-400 text-sm mt-0.5">Find relevant conversion patterns</p>
+            <h2 className="text-white font-bold text-lg tracking-tight">Context Discovery</h2>
+            <p className="text-slate-400 text-xs mt-0.5">Find relevant conversion patterns</p>
           </div>
         </div>
         
-        {/* Status indicator */}
+        {/* Compact status indicator */}
         <div className="flex items-center gap-2">
           {hasQueried && result && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/30 rounded-full">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-green-300 text-xs font-medium">Context Ready</span>
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-green-500/20 border border-green-500/30 rounded-full">
+              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+              <span className="text-green-300 text-xs font-medium">Ready</span>
             </div>
           )}
           {loading && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 border border-blue-500/30 rounded-full">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/20 border border-blue-500/30 rounded-full">
+              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
               <span className="text-blue-300 text-xs font-medium">Searching...</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Enhanced Status information with better visual hierarchy */}
-      <div className="p-6 border-b border-slate-700/30">
-        <div className="bg-gradient-to-r from-slate-800/60 to-slate-700/60 rounded-xl p-4 border border-slate-600/30">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">📋</span>
+      {/* Ultra-Compact Collapsible Status Information */}
+      <div className="border-b border-slate-700/30">
+        <button
+          onClick={() => setIsCodeSectionExpanded(!isCodeSectionExpanded)}
+          className="w-full p-3 flex items-center justify-between hover:bg-slate-800/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-md flex items-center justify-center">
+              {hasAnalyzedFiles ? <FolderIcon className="w-3 h-3 text-white" /> : <DocumentIcon className="w-3 h-3 text-white" />}
             </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-slate-200 font-medium text-sm mb-2">Code being sent for context retrieval:</h3>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-300 font-medium">Source Code:</span>
+              {hasAnalyzedFiles && (
+                <span className="text-green-300 text-xs font-medium">
+                  {Object.keys(analysisFiles).length} files
+                </span>
+              )}
+              {hasCode && !hasAnalyzedFiles && (
+                <span className="text-blue-300 text-xs">
+                  {code.length.toLocaleString()} chars
+                </span>
+              )}
+              {!hasAnyData && (
+                <span className="text-red-300 text-xs">
+                  No code available
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-slate-400 text-xs">
+              {isCodeSectionExpanded ? 'Hide' : 'Show'} Details
+            </span>
+            {isCodeSectionExpanded ? (
+              <ChevronDownIcon className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronRightIcon className="w-4 h-4 text-slate-400" />
+            )}
+          </div>
+        </button>
+        
+        {/* Expandable detailed view */}
+        {isCodeSectionExpanded && (
+          <div className="px-4 pb-3">
+            <div className="bg-gradient-to-r from-slate-800/60 to-slate-700/60 rounded-lg p-3 border border-slate-600/30">
               {hasAnalyzedFiles && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                    <span className="text-green-300 text-sm font-medium">
-                      {Object.keys(analysisFiles).length} analyzed files
-                    </span>
-                  </div>
-                  <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-600/20">
+                  <div className="bg-slate-900/50 rounded-md p-2 border border-slate-600/20">
                     <div className="flex flex-wrap gap-1">
                       {Object.keys(analysisFiles).map((filename, index) => (
                         <span
@@ -519,36 +667,30 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
                 </div>
               )}
               {hasCode && !hasAnalyzedFiles && (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                  <span className="text-blue-300 text-sm">
-                    Single code block: {code.length.toLocaleString()} characters
-                  </span>
+                <div className="text-blue-300 text-xs">
+                  Single code block ready for analysis
                 </div>
               )}
               {!hasAnyData && (
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
-                  <span className="text-red-300 text-sm">
-                    No code available. Please complete the analysis step first.
-                  </span>
+                <div className="text-red-300 text-xs">
+                  Please complete the analysis step first to provide source code.
                 </div>
               )}
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Enhanced Action Button */}
-      <div className="p-6 border-b border-slate-700/30">
+      {/* Compact Action Button */}
+      <div className="p-4 border-b border-slate-700/30">
         <button
-          className={`w-full py-4 rounded-xl font-semibold text-white text-base transition-all duration-300 transform relative overflow-hidden group ${
+          className={`w-full py-3 rounded-xl font-semibold text-white text-sm transition-all duration-300 transform relative overflow-hidden group ${
             loading
               ? "bg-gradient-to-r from-blue-500/50 to-cyan-500/50 cursor-not-allowed"
               : hasQueried
-              ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 hover:scale-[1.02] hover:shadow-xl hover:shadow-green-500/25"
+              ? "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 hover:scale-[1.02] hover:shadow-lg hover:shadow-green-500/25"
               : hasAnyData
-              ? "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 hover:scale-[1.02] hover:shadow-xl hover:shadow-blue-500/25"
+              ? "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/25"
               : "bg-gradient-to-r from-gray-500/50 to-gray-600/50 cursor-not-allowed"
           }`}
           onClick={handleQuery}
@@ -557,25 +699,25 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
           {/* Button background effects */}
           <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           
-          <div className="relative flex items-center justify-center gap-3">
+          <div className="relative flex items-center justify-center gap-2">
             {loading ? (
               <>
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span>Discovering Conversion Patterns...</span>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <span>Discovering Patterns...</span>
               </>
             ) : hasQueried ? (
               <>
-                <CheckCircleIcon className="w-5 h-5" />
+                <CheckCircleIcon className="w-4 h-4" />
                 <span>Refresh Context</span>
               </>
             ) : hasAnyData ? (
               <>
-                <MagnifyingGlassIcon className="w-5 h-5" />
+                <MagnifyingGlassIcon className="w-4 h-4" />
                 <span>Discover Context</span>
               </>
             ) : (
               <>
-                <ExclamationCircleIcon className="w-5 h-5" />
+                <ExclamationCircleIcon className="w-4 h-4" />
                 <span>Complete Analysis First</span>
               </>
             )}
@@ -583,16 +725,16 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
         </button>
       </div>
 
-      {/* Enhanced Error Display */}
+      {/* Compact Error Display */}
       {error && (
-        <div className="p-6 border-b border-slate-700/30">
-          <div className="bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-red-500 to-pink-500 rounded-lg flex items-center justify-center">
-                <ExclamationCircleIcon className="w-5 h-5 text-white" />
+        <div className="p-4 border-b border-slate-700/30">
+          <div className="bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-red-500 to-pink-500 rounded-md flex items-center justify-center">
+                <ExclamationCircleIcon className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1">
-                <h4 className="text-red-300 font-medium text-sm mb-1">Context Discovery Failed</h4>
+                <h4 className="text-red-300 font-medium text-xs mb-1">Discovery Failed</h4>
                 <p className="text-red-400/80 text-xs leading-relaxed">{error}</p>
               </div>
             </div>
@@ -600,12 +742,101 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
         </div>
       )}
 
-      {/* Enhanced Results Panel with better scrolling */}
+      {/* Glass Morphism Catalog Panel */}
       <div className="flex-1 p-6 overflow-hidden">
-        <div className="h-full overflow-y-auto pr-2 context-sidebar-scrollbar">
+        <div className="h-full overflow-y-auto pr-2 catalog-scrollbar">
           {renderResults()}
         </div>
       </div>
+      
+      {/* Add custom styles for glass morphism */}
+      <style jsx>{`
+        .glass-pattern-card {
+          position: relative;
+          transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .glass-pattern-card:hover {
+          transform: translateY(-8px) scale(1.02);
+          box-shadow: 
+            0 20px 40px rgba(0,0,0,0.4),
+            inset 0 1px 0 rgba(255,255,255,0.2),
+            0 0 0 1px rgba(255,255,255,0.1) !important;
+        }
+        
+        .glassmorphism-card {
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 
+            0 8px 32px rgba(0,0,0,0.3),
+            inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        
+        .patterns-catalog {
+          animation: fadeInUp 0.6s ease-out;
+        }
+        
+        .catalog-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        .catalog-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255,255,255,0.1);
+          border-radius: 10px;
+        }
+        
+        .catalog-scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(45deg, rgba(59, 130, 246, 0.5), rgba(168, 85, 247, 0.5));
+          border-radius: 10px;
+          border: 2px solid transparent;
+          background-clip: content-box;
+        }
+        
+        .catalog-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(45deg, rgba(59, 130, 246, 0.8), rgba(168, 85, 247, 0.8));
+          background-clip: content-box;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0,0,0,0.2);
+          border-radius: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.3);
+          border-radius: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.5);
+        }
+        
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

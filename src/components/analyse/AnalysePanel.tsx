@@ -1,4 +1,3 @@
-// components/analyse/AnalysisPanel.tsx
 "use client";
 
 import React, { useState } from 'react';
@@ -7,9 +6,8 @@ import {
   XCircle, 
   AlertTriangle, 
   FileCode, 
-  Clock,
   TrendingUp,
-  Info
+  RefreshCw
 } from 'lucide-react';
 
 import { BackendAnalysisResponse, ClassificationPanelProps, TabId } from './types/BackendTypes';
@@ -18,12 +16,43 @@ import {
   getAnalysisTiming, 
   getMigrationInfo, 
   getComplexityInfo, 
-  hasBackendData 
+  hasBackendData,
+  getUpgradeInfo,
+  getAnalysisStatus // <--- ADD THIS IMPORT!
 } from './utils/backendUtils';
 
 import { AnalysisOverviewTab } from './tabs/AnalysisOverviewTab';
 import { TechnicalDetailsTab } from './tabs/TechnicalDetailsTab';
 import { AssessmentTab } from './tabs/AssessmentTab';
+
+// SAFE: Sanitize result object to prevent React rendering errors
+const sanitizeResult = (result: BackendAnalysisResponse): BackendAnalysisResponse => {
+  const sanitizeValue = (value: any): any => {
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+    if (Array.isArray(value)) return value.map(sanitizeValue);
+    
+    if (typeof value === 'object') {
+      // Convert problematic objects to safe strings
+      const keys = Object.keys(value);
+      if (keys.includes('description') && keys.includes('configuration_complexity')) {
+        // This is a Salt response object - convert to string
+        return value.description || JSON.stringify(value, null, 2);
+      }
+      
+      // Recursively sanitize regular objects
+      const sanitized: any = {};
+      for (const [key, val] of Object.entries(value)) {
+        sanitized[key] = sanitizeValue(val);
+      }
+      return sanitized;
+    }
+    
+    return String(value);
+  };
+
+  return sanitizeValue(result) as BackendAnalysisResponse;
+};
 
 const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
   result,
@@ -85,11 +114,18 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
     );
   }
 
+  // SAFE: Sanitize the result before using it
+  const safeResult = sanitizeResult(result);
+
   // Get data for display
-  const agentInfo = getAgentInfo(result);
-  const timing = getAnalysisTiming(result);
-  const migrationInfo = getMigrationInfo(result);
-  const complexityInfo = getComplexityInfo(result);
+  const agentInfo = getAgentInfo(safeResult);
+  const timing = getAnalysisTiming(safeResult);
+  const migrationInfo = getMigrationInfo(safeResult);
+  const complexityInfo = getComplexityInfo(safeResult);
+  const upgradeInfo = getUpgradeInfo(safeResult);
+
+  // --- NEW: Non-hardcoded status extraction ---
+  const statusText = getAnalysisStatus(safeResult);
 
   // Tab configuration
   const tabs = [
@@ -97,41 +133,6 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
     { id: 'technical' as TabId, label: 'Technical', icon: AlertTriangle },
     { id: 'assessment' as TabId, label: 'Assessment', icon: TrendingUp }
   ];
-
-  // Convertible status
-  const getConvertibleDisplay = () => {
-    if (result.convertible === true) {
-      return { 
-        text: 'Yes', 
-        color: 'bg-green-900/30 text-green-400 border-green-500/30',
-        icon: CheckCircle 
-      };
-    } else if (result.convertible === false) {
-      return { 
-        text: 'Issues', 
-        color: 'bg-red-900/30 text-red-400 border-red-500/30',
-        icon: XCircle 
-      };
-    }
-    
-    // Infer from recommendation
-    const action = result.recommendations?.consolidation_action;
-    if (action === 'REUSE' || action === 'EXTEND') {
-      return { 
-        text: 'Likely', 
-        color: 'bg-blue-900/30 text-blue-400 border-blue-500/30',
-        icon: CheckCircle 
-      };
-    }
-    
-    return { 
-      text: 'Unknown', 
-      color: 'bg-gray-800/50 text-gray-400 border-gray-600/30',
-      icon: AlertTriangle 
-    };
-  };
-
-  const convertibleStatus = getConvertibleDisplay();
 
   return (
     <div className="w-full h-full flex flex-col bg-gray-900 text-white">
@@ -172,22 +173,49 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
           <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
             <div className="text-lg font-bold text-orange-400 flex items-center justify-center gap-1">
               <span>{agentInfo.icon}</span>
-              <span className="capitalize">{agentInfo.technology}</span>
+              <span className="capitalize">
+                {agentInfo.technology && agentInfo.technology.startsWith("ansible")
+                  ? "Ansible"
+                  : agentInfo.technology.replace('-', ' ')
+                }
+              </span>
+
             </div>
             <div className="text-xs text-gray-500 mt-1">Technology</div>
           </div>
 
-          {/* Convertible Status */}
+          {/* --- SMART STATUS CARD (non-hardcoded) --- */}
           <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-            <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${convertibleStatus.color}`}>
-              <convertibleStatus.icon size={12} />
-              {convertibleStatus.text}
+            <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${
+              statusText === 'Upgrade Needed'
+                ? 'bg-yellow-900/30 text-yellow-400 border-yellow-500/30'
+                : statusText === 'Up to Date'
+                ? 'bg-green-900/30 text-green-400 border-green-500/30'
+                : statusText === 'Possible Upgrade'
+                ? 'bg-blue-900/30 text-blue-400 border-blue-500/30'
+                : 'bg-gray-800/50 text-gray-400 border-gray-600/30'
+            }`}>
+              {statusText === 'Upgrade Needed' && <RefreshCw size={12} />}
+              {statusText === 'Up to Date' && <CheckCircle size={12} />}
+              {statusText === 'Possible Upgrade' && <AlertTriangle size={12} />}
+              {statusText === 'Unknown' && <AlertTriangle size={12} />}
+              {statusText}
             </div>
-            <div className="text-xs text-gray-500 mt-1">Convertible</div>
+            <div className="text-xs text-gray-500 mt-1">Status</div>
           </div>
 
-          {/* Complexity */}
-          {complexityInfo && (
+          {/* Complexity or Breaking Changes Count for Ansible */}
+          {agentInfo.technology === 'ansible-upgrade' && upgradeInfo?.hasUpgradeData ? (
+            <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+              <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${
+                upgradeInfo.breakingChangesCount > 0 ? 'text-red-400 bg-red-900/30 border-red-500/30' : 'text-green-400 bg-green-900/30 border-green-500/30'
+              }`}>
+                <span>{upgradeInfo.breakingChangesCount > 0 ? '⚠️' : ''}</span>
+                <span>{upgradeInfo.breakingChangesCount} Breaking</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">Changes</div>
+            </div>
+          ) : complexityInfo ? (
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${
                 complexityInfo.level === 'HIGH' ? 'text-red-400 bg-red-900/30 border-red-500/30' :
@@ -199,10 +227,20 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
               </div>
               <div className="text-xs text-gray-500 mt-1">Complexity</div>
             </div>
-          )}
+          ) : null}
 
-          {/* Migration Effort */}
-          {migrationInfo && (
+          {/* Migration Effort or Version Info for Ansible */}
+          {agentInfo.technology === 'ansible-upgrade' && upgradeInfo?.hasUpgradeData && upgradeInfo.currentVersion !== 'Not specified' ? (
+            <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+              <div className="text-xs font-medium text-blue-400">
+                {upgradeInfo.currentVersion}
+                {upgradeInfo.recommendedVersion !== 'Not specified' && upgradeInfo.recommendedVersion !== upgradeInfo.currentVersion && (
+                  <span className="text-gray-500"> → {upgradeInfo.recommendedVersion}</span>
+                )}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">Version</div>
+            </div>
+          ) : migrationInfo ? (
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${migrationInfo.color.replace('text-', 'border-').replace('-400', '-500/30')} ${migrationInfo.color.replace('text-', 'bg-').replace('-400', '-900/30')}`}>
                 <TrendingUp size={12} />
@@ -210,7 +248,7 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
               </div>
               <div className="text-xs text-gray-500 mt-1">Migration</div>
             </div>
-          )}
+          ) : null}
 
         </div>
       </div>
@@ -235,11 +273,11 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
         </div>
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content - SAFE: Pass sanitized result */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-        {activeTab === 'overview' && <AnalysisOverviewTab result={result} />}
-        {activeTab === 'technical' && <TechnicalDetailsTab result={result} />}
-        {activeTab === 'assessment' && <AssessmentTab result={result} />}
+        {activeTab === 'overview' && <AnalysisOverviewTab result={safeResult} />}
+        {activeTab === 'technical' && <TechnicalDetailsTab result={safeResult} />}
+        {activeTab === 'assessment' && <AssessmentTab result={safeResult} />}
       </div>
       
     </div>
