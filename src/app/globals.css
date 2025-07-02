@@ -339,3 +339,190 @@ body {
     100% { opacity: 1; transform: translateY(0);}
   }
 }
+/* =============================================================================
+   OLED BLACK BACKGROUND UPDATES
+   Replace specific background colors with OLED black (#000000) systematically
+   ============================================================================= */
+
+/* 1. MAIN LAYOUT BACKGROUNDS */
+/* Replace: bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 */
+.x2a-main-layout-bg {
+  background: #000000 !important;
+}
+
+/* Replace: bg-gray-900, bg-slate-900, etc. in main containers */
+.x2a-panel-bg {
+  background: #000000 !important;
+}
+
+/* 2. PANEL SPECIFIC BACKGROUNDS */
+/* Side panel background - currently #161B22 */
+.x2a-side-panel {
+  background: #000000 !important;
+}
+
+/* Main panel background - currently #1F2937 */
+.x2a-main-panel {
+  background: #000000 !important;
+}
+
+/* Log panel background - currently #181f2a */
+.x2a-log-panel {
+  background: #000000 !important;
+}
+
+/* 3. CARD AND COMPONENT BACKGROUNDS */
+/* Replace various gray backgrounds with pure black */
+.oled-card-bg {
+  background: #000000 !important;
+}
+
+/* For gradient backgrounds that should become solid black */
+.oled-gradient-to-black {
+  background: #000000 !important;
+}
+
+/* 4. MODAL AND OVERLAY BACKGROUNDS */
+.oled-modal-bg {
+  background: #000000 !important;
+}
+
+/* 5. SPECIFIC COMPONENT OVERRIDES */
+/* Analysis panel backgrounds */
+.analysis-panel-bg {
+  background: #000000 !important;
+}
+
+/* Context panel backgrounds */
+.context-panel-bg {
+  background: #000000 !important;
+}
+
+/* =============================================================================
+   TARGETED CLASS REPLACEMENTS
+   Apply these classes to specific elements instead of changing globals
+   ============================================================================= */
+
+/* Main page background */
+.page-bg-oled {
+  background: #000000 !important;
+}
+
+/* Header/nav backgrounds */
+.header-bg-oled {
+  background: #000000 !important;
+}
+
+/* Panel container backgrounds */
+.panel-container-bg-oled {
+  background: #000000 !important;
+}
+
+/* Card backgrounds */
+.card-bg-oled {
+  background: #000000 !important;
+}
+
+/* Modal/dialog backgrounds */
+.modal-bg-oled {
+  background: #000000 !important;
+}
+
+/* =============================================================================
+   PRESERVE BORDERS AND OTHER VISUAL ELEMENTS
+   Keep existing border colors, shadows, and other styling intact
+   ============================================================================= */
+
+/* Ensure borders remain visible against black background */
+.oled-border-preserve {
+  border-color: #374151 !important; /* Keep existing gray borders */
+}
+
+/* Maintain text contrast */
+.oled-text-preserve {
+  /* Don't change text colors - they should already work on black */
+}
+
+/* =============================================================================
+   UTILITY CLASSES FOR GRADIENTS TO BLACK
+   Use these to replace specific gradient patterns
+   ============================================================================= */
+
+/* Replace: bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 */
+.gradient-to-black-1 {
+  background: #000000 !important;
+}
+
+/* Replace: bg-gradient-to-br from-gray-900/20 to-gray-800/10 */
+.gradient-to-black-2 {
+  background: #000000 !important;
+}
+
+/* Replace: bg-gradient-to-br from-gray-800/40 to-gray-900/40 */
+.gradient-to-black-3 {
+  background: #000000 !important;
+}
+
+/* =============================================================================
+   RESPONSIVE PRESERVATION
+   Ensure mobile/tablet layouts maintain OLED black
+   ============================================================================= */
+
+@media (max-width: 1023px) {
+  .x2a-3panel-layout {
+    background: #000000 !important;
+  }
+  
+  .x2a-side-panel,
+  .x2a-main-panel,
+  .x2a-log-panel {
+    background: #000000 !important;
+  }
+}
+
+/* =============================================================================
+   SPECIFIC PATTERN REPLACEMENTS
+   Common background patterns found in your codebase
+   ============================================================================= */
+
+/* Pattern 1: Main container backgrounds */
+.bg-gray-900,
+.bg-slate-900,
+.bg-gray-800 {
+  background-color: #000000 !important;
+}
+
+/* Pattern 2: Gradient backgrounds that should be solid black */
+.bg-gradient-to-br.from-slate-900,
+.bg-gradient-to-br.from-gray-900,
+.bg-gradient-to-br.from-gray-800 {
+  background: #000000 !important;
+}
+
+/* Pattern 3: Panel specific overrides */
+div[class*="bg-gray-900"],
+div[class*="bg-slate-900"],
+div[class*="bg-gray-800"] {
+  background: #000000 !important;
+}
+
+/* =============================================================================
+   SAFE APPLICATION APPROACH
+   Use data attributes to selectively apply OLED theme
+   ============================================================================= */
+
+/* Add data-theme="oled" to body or main container */
+[data-theme="oled"] .main-bg,
+[data-theme="oled"] .panel-bg,
+[data-theme="oled"] .card-bg,
+[data-theme="oled"] .modal-bg {
+  background: #000000 !important;
+}
+
+/* Specific element targeting with data attribute */
+[data-theme="oled"] .x2a-3panel-layout,
+[data-theme="oled"] .x2a-side-panel,
+[data-theme="oled"] .x2a-main-panel,
+[data-theme="oled"] .x2a-log-panel {
+  background: #000000 !important;
+}

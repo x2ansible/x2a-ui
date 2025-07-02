@@ -18,12 +18,13 @@ import {
   getComplexityInfo, 
   hasBackendData,
   getUpgradeInfo,
-  getAnalysisStatus // <--- ADD THIS IMPORT!
+  getAnalysisStatus
 } from './utils/backendUtils';
 
 import { AnalysisOverviewTab } from './tabs/AnalysisOverviewTab';
 import { TechnicalDetailsTab } from './tabs/TechnicalDetailsTab';
 import { AssessmentTab } from './tabs/AssessmentTab';
+import { EnhancedAnalysisLoading } from '../EnhancedAnalysisLoading';
 
 // SAFE: Sanitize result object to prevent React rendering errors
 const sanitizeResult = (result: BackendAnalysisResponse): BackendAnalysisResponse => {
@@ -54,33 +55,63 @@ const sanitizeResult = (result: BackendAnalysisResponse): BackendAnalysisRespons
   return sanitizeValue(result) as BackendAnalysisResponse;
 };
 
-const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
+// Quick Alternative: Add technologyType prop without modifying interface
+const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: string }> = ({
   result,
   loading,
-  error
+  error,
+  technologyType // Added this prop directly
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
-  // Handle loading state
+  // Get technology type for enhanced loading
+  const getTechnologyType = () => {
+    // Use passed prop first
+    if (technologyType) {
+      return technologyType;
+    }
+    
+    // Fallback to detection from result
+    if (result?.metadata?.technology_type) {
+      return result.metadata.technology_type;
+    }
+    
+    // Fallback detection from result structure
+    const anyResult = result as any;
+    if (anyResult?.managed_services || anyResult?.object_type) return 'salt';
+    if (anyResult?.current_state || anyResult?.upgrade_requirements) return 'ansible-upgrade';
+    if (result?.functionality || result?.tree_sitter_facts) return 'chef';
+    
+    return 'chef'; // default
+  };
+
+  // Handle loading state with enhanced animation
   if (loading) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-900">
-        <div className="text-center text-gray-400">
-          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-lg text-gray-300">Analyzing code...</p>
-        </div>
-      </div>
+      <EnhancedAnalysisLoading 
+        technologyType={getTechnologyType()}
+      />
     );
   }
 
   // Handle error state
   if (error) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-900">
-        <div className="text-center text-red-400">
-          <XCircle size={48} className="mx-auto mb-4" />
-          <p className="text-lg text-red-300">Analysis Error</p>
-          <p className="text-sm mt-2 text-gray-400">{error}</p>
+      <div className="w-full h-full flex items-center justify-center bg-black">
+        <div className="text-center text-red-400 max-w-md mx-auto px-6">
+          <div className="relative mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-500/20 border-2 border-red-500/50">
+              <XCircle size={32} className="text-red-400" />
+            </div>
+            <div className="absolute inset-0 rounded-full border border-red-500/30 animate-ping"></div>
+          </div>
+          <h2 className="text-xl font-bold text-red-300 mb-3">Analysis Error</h2>
+          <p className="text-sm text-gray-400 leading-relaxed">{error}</p>
+          <div className="mt-6 p-3 bg-red-900/20 rounded-lg border border-red-500/30">
+            <p className="text-xs text-red-300">
+              Please try again or check your input files
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -89,11 +120,32 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
   // Handle no result
   if (!result) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-900">
-        <div className="text-center text-gray-400">
-          <FileCode size={48} className="mx-auto mb-4 text-gray-600" />
-          <p className="text-lg text-gray-300">No analysis performed yet</p>
-          <p className="text-sm mt-2 text-gray-500">Upload and analyze files to see results</p>
+      <div className="w-full h-full flex items-center justify-center bg-black">
+        <div className="text-center text-gray-400 max-w-md mx-auto px-6">
+          <div className="relative mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-700/30 border-2 border-gray-600/50">
+              <FileCode size={32} className="text-gray-500" />
+            </div>
+            <div className="absolute inset-0 rounded-full border border-gray-600/30 animate-pulse"></div>
+          </div>
+          <h2 className="text-xl font-bold text-gray-300 mb-3">Ready for Analysis</h2>
+          <p className="text-sm text-gray-500 leading-relaxed mb-6">
+            Upload and analyze files to see detailed results
+          </p>
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+              <div className="text-blue-400 font-bold">🍳</div>
+              <div className="text-gray-500 mt-1">Chef</div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+              <div className="text-green-400 font-bold">🟢</div>
+              <div className="text-gray-500 mt-1">Salt</div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+              <div className="text-red-400 font-bold">🅰️</div>
+              <div className="text-gray-500 mt-1">Ansible</div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -102,13 +154,26 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
   // Handle backend failure
   if (result.success === false) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-900">
-        <div className="text-center text-red-400">
-          <XCircle size={48} className="mx-auto mb-4" />
-          <p className="text-lg text-red-300">Analysis Failed</p>
-          <p className="text-sm mt-2 text-gray-400">
+      <div className="w-full h-full flex items-center justify-center bg-black">
+        <div className="text-center text-red-400 max-w-md mx-auto px-6">
+          <div className="relative mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-500/20 border-2 border-red-500/50">
+              <XCircle size={32} className="text-red-400" />
+            </div>
+            <div className="absolute inset-0 rounded-full border border-red-500/30 animate-ping"></div>
+          </div>
+          <h2 className="text-xl font-bold text-red-300 mb-3">Analysis Failed</h2>
+          <p className="text-sm text-gray-400 leading-relaxed mb-4">
             {result.error || 'Backend analysis was not successful'}
           </p>
+          <div className="bg-red-900/20 rounded-lg p-4 border border-red-500/30">
+            <p className="text-xs text-red-300 text-left">
+              <strong>Possible causes:</strong><br/>
+              • Invalid file format<br/>
+              • Network connectivity issues<br/>
+              • Server processing error
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -124,7 +189,7 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
   const complexityInfo = getComplexityInfo(safeResult);
   const upgradeInfo = getUpgradeInfo(safeResult);
 
-  // --- NEW: Non-hardcoded status extraction ---
+  // Non-hardcoded status extraction
   const statusText = getAnalysisStatus(safeResult);
 
   // Tab configuration
@@ -135,21 +200,23 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
   ];
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-900 text-white">
+    <div className="w-full h-full flex flex-col bg-black text-white">
       
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-gray-700 p-4">
+      <div className="flex-shrink-0 border-b border-gray-700 p-4 bg-gray-900/50">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
-              <FileCode className="text-blue-400" size={20} />
+              <div className="p-1.5 bg-blue-500/20 rounded border border-blue-400/30">
+                <FileCode className="text-blue-400" size={18} />
+              </div>
               Analysis Results
               {agentInfo.icon && <span className="text-lg">{agentInfo.icon}</span>}
             </h2>
             <p className="text-gray-400 mt-1 text-sm">
               {agentInfo.name}
               {agentInfo.correlationId && (
-                <span className="ml-2 text-xs text-gray-500">
+                <span className="ml-2 text-xs text-gray-500 font-mono">
                   ID: {agentInfo.correlationId.substring(0, 8)}...
                 </span>
               )}
@@ -166,25 +233,24 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
       </div>
 
       {/* Metrics Cards */}
-      <div className="flex-shrink-0 p-4 bg-gray-800/50 border-b border-gray-700">
+      <div className="flex-shrink-0 p-4 bg-gray-800/30 border-b border-gray-700">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           
           {/* Agent/Technology */}
           <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
             <div className="text-lg font-bold text-orange-400 flex items-center justify-center gap-1">
               <span>{agentInfo.icon}</span>
-              <span className="capitalize">
+              <span className="capitalize text-sm">
                 {agentInfo.technology && agentInfo.technology.startsWith("ansible")
                   ? "Ansible"
-                  : agentInfo.technology.replace('-', ' ')
+                  : agentInfo.technology?.replace('-', ' ')
                 }
               </span>
-
             </div>
             <div className="text-xs text-gray-500 mt-1">Technology</div>
           </div>
 
-          {/* --- SMART STATUS CARD (non-hardcoded) --- */}
+          {/* Smart Status Card */}
           <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
             <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${
               statusText === 'Upgrade Needed'
@@ -210,7 +276,7 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
               <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${
                 upgradeInfo.breakingChangesCount > 0 ? 'text-red-400 bg-red-900/30 border-red-500/30' : 'text-green-400 bg-green-900/30 border-green-500/30'
               }`}>
-                <span>{upgradeInfo.breakingChangesCount > 0 ? '⚠️' : ''}</span>
+                <span>{upgradeInfo.breakingChangesCount > 0 ? '⚠️' : '✅'}</span>
                 <span>{upgradeInfo.breakingChangesCount} Breaking</span>
               </div>
               <div className="text-xs text-gray-500 mt-1">Changes</div>
@@ -254,7 +320,7 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex-shrink-0 px-4 pt-3">
+      <div className="flex-shrink-0 px-4 pt-3 bg-gray-900/30">
         <div className="flex gap-1 overflow-x-auto">
           {tabs.map((tab) => (
             <button
@@ -274,7 +340,7 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
       </div>
 
       {/* Tab Content - SAFE: Pass sanitized result */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 bg-black">
         {activeTab === 'overview' && <AnalysisOverviewTab result={safeResult} />}
         {activeTab === 'technical' && <TechnicalDetailsTab result={safeResult} />}
         {activeTab === 'assessment' && <AssessmentTab result={safeResult} />}

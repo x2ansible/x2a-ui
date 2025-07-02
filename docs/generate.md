@@ -11,7 +11,7 @@ The `CodeGeneratorAgent`'s fundamental mission is to:
 
 1.  **Generate Accurate Playbooks**: Produce a functionally equivalent Ansible playbook based on provided input IaC code (e.g., Chef, Terraform, Dockerfile).
 2.  **Incorporate Context**: Utilize contextual information (retrieved by agents like the `ContextAgent`) to enhance the quality, accuracy, and best practices of the generated Ansible code.
-3.  **Ensure Production Readiness**: Generate Ansible playbooks that are clean, correctly formatted, and adhere to common YAML and Ansible conventions, suitable for direct use or minimal post-generation adjustments.
+3.  **Ensure Production Readiness**: Generate Ansible Contents that are clean, correctly formatted, and adhere to common YAML and Ansible conventions, suitable for direct use or minimal post-generation adjustments.
 4.  **Maintain Output Integrity**: Rigorously clean the LLM's raw output to remove any extraneous formatting (like Markdown fences or extra quotes) that might break YAML parsing.
 
 ---

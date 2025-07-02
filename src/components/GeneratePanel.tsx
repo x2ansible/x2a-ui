@@ -4,7 +4,6 @@ import {
   ClipboardDocumentIcon, 
   ExclamationCircleIcon,
   CodeBracketIcon,
-  PlayIcon,
   StopIcon,
   CheckCircleIcon,
   ArrowPathIcon
@@ -153,7 +152,7 @@ export default function GeneratePanel({
       if (data.playbook) {
         setPlaybook(data.playbook);
         startStreaming(data.playbook);
-        logMessage(` Playbook generated: ${data.playbook.length} characters`);
+        logMessage(`✅ Playbook generated: ${data.playbook.length} characters`);
         if (onComplete) onComplete(data.playbook);
       } else {
         throw new Error("No playbook in response");
@@ -184,52 +183,49 @@ export default function GeneratePanel({
   const hasAnyData = hasAnalyzedFiles || hasCode;
 
   return (
-    <div ref={panelRef} className="h-full w-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div ref={panelRef} className="h-full w-full flex flex-col bg-black overflow-hidden">
+      
+      {/* Error Banner */}
       {error && (
-        <div className="mx-6 my-4 p-4 glassmorphism-error rounded-xl backdrop-blur-sm shadow-xl">
+        <div className="flex-shrink-0 mx-4 mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-xl">
           <div className="flex items-start space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <ExclamationCircleIcon className="w-5 h-5 text-white" />
-            </div>
+            <ExclamationCircleIcon className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="text-red-300 font-semibold text-base">Generation Failed</h3>
-              <p className="text-red-400/90 mt-1 text-sm leading-relaxed">{error}</p>
+              <h3 className="text-red-300 font-semibold text-sm">Generation Failed</h3>
+              <p className="text-red-400/90 mt-1 text-sm">{error}</p>
             </div>
             <button
               onClick={() => setError(null)}
-              className="p-1 text-red-400 hover:text-red-300 transition-colors rounded-md hover:bg-red-500/20"
+              className="p-1 text-red-400 hover:text-red-300 transition-colors rounded hover:bg-red-500/20"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
+              ×
             </button>
           </div>
         </div>
       )}
 
-      {/* MAIN SCROLL PANEL */}
-      <div className="flex-1 p-6 min-h-0 overflow-y-auto generate-scrollbar">
+      {/* Consolidated Header + Content */}
+      <div className="flex-1 flex flex-col min-h-0 p-4">
         
-        {/* Glass Morphism Header */}
-        <div className="glassmorphism-header rounded-2xl p-6 mb-6 shadow-2xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-xl relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
-                <SparklesIcon className="w-8 h-8 text-white relative z-10" />
+        {/* Single Combined Header */}
+        <div className="flex-shrink-0 bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4 mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+                <SparklesIcon className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <h1 className="font-bold text-white text-2xl lg:text-3xl mb-1">Generate Ansible Playbook</h1>
-                <p className="text-white/70 text-base">
-                  AI-powered infrastructure conversion with {hasAnalyzedFiles ? `${Object.keys(analysisFiles).length} files` : 'your code'}
+              <div className="min-w-0 flex-1">
+                <h1 className="font-bold text-white text-lg">Generate Ansible Content</h1>
+                <p className="text-gray-400 text-sm">
+                  Convert {hasAnalyzedFiles ? `${Object.keys(analysisFiles).length} files` : 'your code'} to Ansible
                 </p>
               </div>
             </div>
             
             <div className="flex items-center space-x-3">
-              {/* Status Badge */}
+              {/* Status */}
               {hasAnyData && (
-                <div className="px-3 py-1.5 glassmorphism-badge rounded-full flex items-center gap-2">
+                <div className="px-3 py-1.5 bg-green-900/30 border border-green-500/30 rounded-full flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                   <span className="text-green-300 text-xs font-medium">
                     {hasAnalyzedFiles ? `${Object.keys(analysisFiles).length} Files Ready` : 'Code Ready'}
@@ -241,307 +237,351 @@ export default function GeneratePanel({
               <button
                 onClick={handleGenerate}
                 disabled={loading || streamingState.isStreaming || !hasAnyData}
-                className={`generate-button px-6 py-3 rounded-xl font-bold text-white shadow-xl transition-all duration-300 transform relative overflow-hidden ${
+                className={`px-4 py-2 rounded-lg font-semibold text-white transition-all duration-200 flex items-center gap-2 ${
                   loading || streamingState.isStreaming || !hasAnyData
-                    ? "opacity-70 cursor-not-allowed scale-95"
-                    : "hover:scale-105 hover:shadow-2xl active:scale-95"
+                    ? "bg-gray-600 opacity-50 cursor-not-allowed"
+                    : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl"
                 }`}
               >
-                {/* Button shine effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
-                
-                <div className="flex items-center space-x-2 relative z-10">
-                  {loading ? (
-                    <>
-                      <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                      <span>Generating...</span>
-                    </>
-                  ) : hasGenerated ? (
-                    <>
-                      <ArrowPathIcon className="w-5 h-5" />
-                      <span>Regenerate</span>
-                    </>
-                  ) : hasAnyData ? (
-                    <>
-                      <SparklesIcon className="w-5 h-5" />
-                      <span>Generate Playbook</span>
-                    </>
-                  ) : (
-                    <>
-                      <ExclamationCircleIcon className="w-5 h-5" />
-                      <span>No Code Available</span>
-                    </>
-                  )}
-                </div>
+                {loading ? (
+                  <>
+                    <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                    <span>Generating...</span>
+                  </>
+                ) : hasGenerated ? (
+                  <>
+                    <ArrowPathIcon className="w-4 h-4" />
+                    <span>Regenerate</span>
+                  </>
+                ) : hasAnyData ? (
+                  <>
+                    <SparklesIcon className="w-4 h-4" />
+                    <span>Generate</span>
+                  </>
+                ) : (
+                  <>
+                    <ExclamationCircleIcon className="w-4 h-4" />
+                    <span>No Code</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
+          
+          {/* Generation Status */}
+          {(panelMode === 'generating' || panelMode === 'complete') && (
+            <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <CodeBracketIcon className="w-5 h-5 text-emerald-400" />
+                  {streamingState.isStreaming && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-ping"></div>
+                  )}
+                </div>
+                <div>
+                  <span className="text-white font-medium text-sm">
+                    {streamingState.isStreaming ? 'Streaming...' : 
+                     panelMode === 'complete' ? `Generated ${playbook.length} characters` : 'Processing...'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                {/* Status Badge */}
+                {streamingState.isStreaming ? (
+                  <div className="px-2 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-full">
+                    <span className="text-emerald-300 text-xs font-medium">STREAMING</span>
+                  </div>
+                ) : panelMode === 'complete' ? (
+                  <div className="px-2 py-1 bg-green-900/30 border border-green-500/30 rounded-full">
+                    <span className="text-green-300 text-xs font-medium">COMPLETE</span>
+                  </div>
+                ) : null}
+                
+                {/* Action Buttons */}
+                {streamingState.isStreaming && (
+                  <button
+                    onClick={stopStreaming}
+                    className="p-1.5 text-red-400 hover:text-red-300 transition-colors rounded hover:bg-red-500/20"
+                    title="Stop streaming"
+                  >
+                    <StopIcon className="w-4 h-4" />
+                  </button>
+                )}
+                {(playbook || streamingState.currentText) && (
+                  <button
+                    onClick={() => copyToClipboard(playbook || streamingState.currentText)}
+                    className="p-1.5 text-gray-400 hover:text-cyan-300 transition-colors rounded hover:bg-cyan-500/20 relative"
+                    title="Copy YAML"
+                  >
+                    <ClipboardDocumentIcon className="w-4 h-4" />
+                    {copiedFeedback && (
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-green-500 text-white text-xs rounded font-medium">
+                        Copied!
+                      </div>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Generation Results */}
-        {(panelMode === 'generating' || panelMode === 'complete') && (
-          <div className="space-y-6">
-            
-            {/* Glass Results Header */}
-            <div className="glassmorphism-card rounded-xl p-4 shadow-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center shadow-lg">
-                      <CodeBracketIcon className="w-6 h-6 text-white" />
+        {/* Code Display Area */}
+        <div className="flex-1 min-h-0">
+          {loading || streamingState.isStreaming ? (
+            /* Professional Generation Animation */
+            <div className="h-full bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden relative">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center max-w-md px-6">
+                  
+                  {/* Animated Tech Stack */}
+                  <div className="relative mb-8">
+                    <div className="flex items-center justify-center space-x-4 mb-6">
+                      
+                      {/* Source Icon */}
+                      <div className="relative">
+                        <div className="w-12 h-12 bg-orange-500/20 border-2 border-orange-400/40 rounded-xl flex items-center justify-center transform transition-all duration-1000 animate-pulse">
+                          <span className="text-orange-400 text-xl font-bold">🍳</span>
+                        </div>
+                        <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-orange-400 font-medium">
+                          {hasAnalyzedFiles ? `${Object.keys(analysisFiles).length} Files` : 'Source'}
+                        </div>
+                      </div>
+                      
+                      {/* Arrow Animation */}
+                      <div className="flex items-center space-x-1">
+                        <div className="w-2 h-0.5 bg-gradient-to-r from-cyan-400 to-transparent rounded animate-pulse"></div>
+                        <div className="w-2 h-0.5 bg-gradient-to-r from-cyan-400 to-transparent rounded animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-0.5 bg-gradient-to-r from-cyan-400 to-transparent rounded animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                        <div className="text-cyan-400 animate-bounce" style={{ animationDelay: '0.6s' }}>→</div>
+                      </div>
+                      
+                      {/* AI Engine */}
+                      <div className="relative">
+                        <div className="w-16 h-12 bg-gradient-to-br from-purple-500/30 to-pink-500/30 border-2 border-purple-400/50 rounded-xl flex items-center justify-center relative overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"></div>
+                          <span className="text-purple-400 text-lg font-bold relative z-10">🧠</span>
+                        </div>
+                        <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-purple-400 font-medium">
+                          AI Engine
+                        </div>
+                      </div>
+                      
+                      {/* Arrow Animation */}
+                      <div className="flex items-center space-x-1">
+                        <div className="w-2 h-0.5 bg-gradient-to-r from-green-400 to-transparent rounded animate-pulse" style={{ animationDelay: '0.8s' }}></div>
+                        <div className="w-2 h-0.5 bg-gradient-to-r from-green-400 to-transparent rounded animate-pulse" style={{ animationDelay: '1.0s' }}></div>
+                        <div className="w-2 h-0.5 bg-gradient-to-r from-green-400 to-transparent rounded animate-pulse" style={{ animationDelay: '1.2s' }}></div>
+                        <div className="text-green-400 animate-bounce" style={{ animationDelay: '1.4s' }}>→</div>
+                      </div>
+                      
+                      {/* Ansible Output */}
+                      <div className="relative">
+                        <div className="w-12 h-12 bg-red-500/20 border-2 border-red-400/40 rounded-xl flex items-center justify-center animate-pulse">
+                          <span className="text-red-400 text-xl font-bold">🅰️</span>
+                        </div>
+                        <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-red-400 font-medium">
+                          Ansible
+                        </div>
+                      </div>
                     </div>
-                    {streamingState.isStreaming && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full animate-ping"></div>
-                    )}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-white text-xl">Ansible Playbook</h3>
-                    <p className="text-white/60 text-sm">
-                      {streamingState.isStreaming ? 'Live streaming from AI agent...' : 
-                        panelMode === 'complete' ? `Generated ${playbook.length} characters` : 'Processing...'}
+                  
+                  {/* Status Text */}
+                  <div className="mb-6">
+                    <h3 className="text-white text-xl font-bold mb-2 flex items-center justify-center gap-2">
+                      {streamingState.isStreaming ? (
+                        <>
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          Streaming Playbook
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                          Generating Ansible Content
+                        </>
+                      )}
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      {streamingState.isStreaming 
+                        ? 'AI agent is streaming your Ansible playbook...'
+                        : 'AI agent is analyzing your infrastructure code...'
+                      }
                     </p>
                   </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  {/* Streaming Status */}
-                  {streamingState.isStreaming && (
-                    <div className="flex items-center space-x-2 px-3 py-1.5 glassmorphism-badge rounded-full">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                  
+                  {/* Progress Simulation */}
+                  <div className="w-full bg-gray-800 rounded-full h-2 mb-6 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full animate-progress"></div>
+                  </div>
+                  
+                  {/* Animated Steps */}
+                  <div className="space-y-3">
+                    {[
+                      { text: 'Parsing infrastructure code', delay: '0s', icon: '📄' },
+                      { text: 'Analyzing dependencies', delay: '1s', icon: '🔍' },
+                      { text: 'Optimizing for Ansible', delay: '2s', icon: '⚙️' },
+                      { text: streamingState.isStreaming ? 'Streaming results' : 'Generating YAML', delay: '3s', icon: streamingState.isStreaming ? '📡' : '📝' }
+                    ].map((step, index) => (
+                      <div 
+                        key={index}
+                        className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700/30 animate-step-reveal opacity-0"
+                        style={{ 
+                          animationDelay: step.delay,
+                          animationFillMode: 'forwards'
+                        }}
+                      >
+                        <span className="text-lg">{step.icon}</span>
+                        <span className="text-gray-300 text-sm font-medium flex-1">{step.text}</span>
+                        <div className="flex space-x-1">
+                          <div className="w-1 h-1 bg-cyan-400 rounded-full animate-ping" style={{ animationDelay: '0s' }}></div>
+                          <div className="w-1 h-1 bg-cyan-400 rounded-full animate-ping" style={{ animationDelay: '0.2s' }}></div>
+                          <div className="w-1 h-1 bg-cyan-400 rounded-full animate-ping" style={{ animationDelay: '0.4s' }}></div>
+                        </div>
                       </div>
-                      <span className="text-emerald-300 text-xs font-medium">STREAMING</span>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                   
-                  {/* Complete Status */}
-                  {panelMode === 'complete' && (
-                    <div className="flex items-center space-x-2 px-3 py-1.5 glassmorphism-badge rounded-full">
-                      <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
-                      <span className="text-emerald-300 text-xs font-medium">COMPLETE</span>
-                    </div>
-                  )}
-                  
-                  {/* Action Buttons */}
-                  <div className="flex items-center space-x-2">
-                    {streamingState.isStreaming && (
-                      <button
-                        onClick={stopStreaming}
-                        className="p-2 text-red-400 hover:text-red-300 transition-all duration-200 rounded-lg hover:bg-red-500/20 glassmorphism-button"
-                        title="Stop streaming"
-                      >
-                        <StopIcon className="w-4 h-4" />
-                      </button>
-                    )}
-                    {(playbook || streamingState.currentText) && (
-                      <button
-                        onClick={() => copyToClipboard(playbook || streamingState.currentText)}
-                        className="p-2 text-white/60 hover:text-cyan-300 transition-all duration-200 rounded-lg hover:bg-cyan-500/20 glassmorphism-button relative"
-                        title="Copy YAML"
-                      >
-                        <ClipboardDocumentIcon className="w-4 h-4" />
-                        {copiedFeedback && (
-                          <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-green-500/90 backdrop-blur-sm text-white text-xs rounded-lg font-medium animate-fade-in border border-green-400/30">
-                            Copied!
-                          </div>
-                        )}
-                      </button>
-                    )}
+                  {/* Floating Particles */}
+                  <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                    {[...Array(8)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="absolute w-1 h-1 bg-cyan-400/60 rounded-full animate-float"
+                        style={{
+                          left: `${20 + Math.random() * 60}%`,
+                          top: `${20 + Math.random() * 60}%`,
+                          animationDelay: `${Math.random() * 3}s`,
+                          animationDuration: `${3 + Math.random() * 2}s`
+                        }}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
-            
-            {/* Glass Code Display */}
-            <div className="glassmorphism-code rounded-xl overflow-hidden shadow-2xl">
-              {(streamingState.currentText || playbook) ? (
-                <pre 
-                  ref={codeCanvasRef}
-                  className="p-6 text-slate-100 font-mono text-sm leading-relaxed overflow-auto max-h-96 lg:max-h-[500px] generate-code-scrollbar"
-                  style={{ 
-                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
-                    tabSize: 2,
-                    background: 'rgba(0,0,0,0.3)'
-                  }}
-                >
-                  {streamingState.currentText || playbook}
-                  {streamingState.isStreaming && (
-                    <span className="inline-block w-2 h-5 bg-cyan-400 animate-pulse ml-1 align-top" />
-                  )}
-                </pre>
-              ) : (
-                <div className="p-12 text-center">
-                  <div className="w-16 h-16 glassmorphism-placeholder rounded-xl flex items-center justify-center mx-auto mb-4">
-                    <CodeBracketIcon className="w-8 h-8 text-white/50" />
-                  </div>
-                  <p className="text-white/70 text-lg font-medium mb-2">Preparing Generation</p>
-                  <p className="text-white/50 text-sm">
-                    AI agent is processing your infrastructure code...
-                  </p>
+          ) : (streamingState.currentText || playbook) ? (
+            <div className="h-full bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
+              <pre 
+                ref={codeCanvasRef}
+                className="h-full p-4 text-gray-100 font-mono text-sm leading-relaxed overflow-auto custom-scrollbar"
+                style={{ 
+                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  tabSize: 2
+                }}
+              >
+                {streamingState.currentText || playbook}
+                {streamingState.isStreaming && (
+                  <span className="inline-block w-0.5 h-4 bg-cyan-400 animate-pulse ml-1 align-middle" />
+                )}
+              </pre>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center bg-gray-900/30 border border-gray-700/30 rounded-xl">
+              <div className="text-center max-w-md px-4">
+                <div className="w-16 h-16 bg-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-4">
+                  <CodeBracketIcon className="w-8 h-8 text-gray-500" />
                 </div>
-              )}
+                <h3 className="text-gray-300 text-lg font-semibold mb-2">Ready to Generate</h3>
+                <p className="text-gray-500 text-sm mb-6">
+                  {hasAnyData 
+                    ? "Click Generate to convert your infrastructure code to Ansible"
+                    : "Upload files or complete analysis first to generate playbooks"
+                  }
+                </p>
+                {hasAnyData && (
+                  <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-3">
+                    <p className="text-blue-300 text-xs">
+                      💡 Your {hasAnalyzedFiles ? 'analyzed files' : 'code'} will be converted to optimized Ansible YAML
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!context && !classificationResult && (
-          <div className="text-center py-16">
-            <div className="w-20 h-20 glassmorphism-empty rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
-              <SparklesIcon className="w-10 h-10 text-white/70" />
-            </div>
-            <h3 className="text-white/90 text-2xl font-bold mb-3">Ready for AI Conversion</h3>
-            <p className="text-white/60 text-lg mb-8 max-w-md mx-auto">
-              Complete context analysis first to see intelligent conversion insights and generate your Ansible playbook
-            </p>
-            <div className="glassmorphism-info rounded-lg p-4 max-w-sm mx-auto">
-              <p className="text-white/50 text-sm">
-                📋 Context analysis will unlock detailed infrastructure analysis and conversion strategy
-              </p>
-            </div>
-          </div>
-        )}
-
+          )}
+        </div>
       </div>
       
-      {/* Add Glass Morphism Styles */}
+      {/* Custom Scrollbar Styles */}
       <style jsx>{`
-        .glassmorphism-header {
-          background: rgba(59, 130, 246, 0.1);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(59, 130, 246, 0.2);
-          box-shadow: 
-            0 8px 32px rgba(0,0,0,0.3),
-            inset 0 1px 0 rgba(255,255,255,0.1);
-        }
-        
-        .glassmorphism-card {
-          background: rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          box-shadow: 
-            0 8px 32px rgba(0,0,0,0.3),
-            inset 0 1px 0 rgba(255,255,255,0.1);
-        }
-        
-        .glassmorphism-code {
-          background: rgba(0, 0, 0, 0.2);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          box-shadow: 
-            0 8px 32px rgba(0,0,0,0.4),
-            inset 0 1px 0 rgba(255,255,255,0.05);
-        }
-        
-        .glassmorphism-error {
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.3);
-          box-shadow: 
-            0 8px 32px rgba(239, 68, 68, 0.2),
-            inset 0 1px 0 rgba(255,255,255,0.1);
-        }
-        
-        .glassmorphism-badge {
-          background: rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .glassmorphism-button {
-          background: rgba(255, 255, 255, 0.1);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .glassmorphism-empty {
-          background: rgba(148, 163, 184, 0.1);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          box-shadow: 
-            0 8px 32px rgba(0,0,0,0.3),
-            inset 0 1px 0 rgba(255,255,255,0.1);
-        }
-        
-        .glassmorphism-info {
-          background: rgba(59, 130, 246, 0.1);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(59, 130, 246, 0.2);
-        }
-        
-        .glassmorphism-placeholder {
-          background: rgba(148, 163, 184, 0.2);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-        }
-        
-        .generate-button {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.9));
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(59, 130, 246, 0.3);
-          box-shadow: 
-            0 8px 32px rgba(59, 130, 246, 0.3),
-            inset 0 1px 0 rgba(255,255,255,0.2);
-        }
-        
-        .generate-button:hover:not(:disabled) {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 1));
-          box-shadow: 
-            0 12px 40px rgba(59, 130, 246, 0.4),
-            inset 0 1px 0 rgba(255,255,255,0.2);
-        }
-        
-        .generate-scrollbar::-webkit-scrollbar {
+        .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
+          height: 8px;
         }
         
-        .generate-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255,255,255,0.1);
-          border-radius: 10px;
-        }
-        
-        .generate-scrollbar::-webkit-scrollbar-thumb {
-          background: linear-gradient(45deg, rgba(59, 130, 246, 0.5), rgba(168, 85, 247, 0.5));
-          border-radius: 10px;
-          border: 2px solid transparent;
-          background-clip: content-box;
-        }
-        
-        .generate-code-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        .generate-code-scrollbar::-webkit-scrollbar-track {
+        .custom-scrollbar::-webkit-scrollbar-track {
           background: rgba(0,0,0,0.2);
-          border-radius: 6px;
+          border-radius: 4px;
         }
         
-        .generate-code-scrollbar::-webkit-scrollbar-thumb {
+        .custom-scrollbar::-webkit-scrollbar-thumb {
           background: rgba(59, 130, 246, 0.5);
-          border-radius: 6px;
+          border-radius: 4px;
         }
         
-        .generate-code-scrollbar::-webkit-scrollbar-thumb:hover {
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(59, 130, 246, 0.7);
         }
         
-        @keyframes fade-in {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
+        /* Professional Generation Animations */
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
         }
         
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
+        }
+        
+        @keyframes progress {
+          0% { width: 0%; }
+          20% { width: 30%; }
+           { width: 60%; }
+          80% { width: 85%; }
+          100% { width: 95%; }
+        }
+        
+        .animate-progress {
+          animation: progress 4s ease-out infinite;
+        }
+        
+        @keyframes step-reveal {
+          from { 
+            opacity: 0; 
+            transform: translateY(10px); 
+          }
+          to { 
+            opacity: 1; 
+            transform: translateY(0); 
+          }
+        }
+        
+        .animate-step-reveal {
+          animation: step-reveal 0.6s ease-out;
+        }
+        
+        @keyframes float {
+          0%, 100% { 
+            transform: translateY(0px) rotate(0deg); 
+            opacity: 0.6; 
+          }
+          25% { 
+            transform: translateY(-10px) rotate(90deg); 
+            opacity: 1; 
+          }
+          50% { 
+            transform: translateY(-20px) rotate(180deg); 
+            opacity: 0.8; 
+          }
+          75% { 
+            transform: translateY(-10px) rotate(270deg); 
+            opacity: 1; 
+          }
+        }
+        
+        .animate-float {
+          animation: float 4s ease-in-out infinite;
         }
       `}</style>
     </div>

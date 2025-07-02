@@ -369,7 +369,7 @@ function RunWorkflowPageInner() {
       <div className="flex justify-between items-center mb-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Convert to Ansible - Step by Step
+            x2Ansible - Agents in Action
           </h1>
         </div>
         <div className="flex items-center gap-4">
@@ -551,6 +551,7 @@ function RunWorkflowPageInner() {
               code={code}
               loading={loading}
               step={step}
+              technologyType={technologyType}
             />
           )}
         </div>

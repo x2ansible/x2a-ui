@@ -1,5 +1,5 @@
 // components/analyse/utils/backendUtils.ts
-// VERIFIED: Handles the Ansible upgrade response format while preserving all existing functionality
+
 
 import { BackendAnalysisResponse } from '../types/BackendTypes';
 
