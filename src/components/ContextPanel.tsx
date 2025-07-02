@@ -67,6 +67,12 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
   // For animated "Copied!" feedback
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
+  // Loading animation state
+  const [currentStep, setCurrentStep] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [pulseIntensity, setPulseIntensity] = useState(1);
+  const [particleCount, setParticleCount] = useState(8);
+
   // Logging utility
   const logMessage = useCallback(
     (message: string) => {
@@ -82,6 +88,51 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
       hasLoggedInit.current = true;
     }
   }, [logMessage, code, analysisFiles]);
+
+  // Loading animation effects
+  useEffect(() => {
+    if (!loading) return;
+
+    // Step progression
+    const stepInterval = setInterval(() => {
+      setCurrentStep(prev => (prev + 1) % 4); // 4 steps total
+    }, 2500);
+
+    // Progress simulation
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        const newProgress = prev + Math.random() * 12;
+        return newProgress > 95 ? 95 : newProgress;
+      });
+    }, 400);
+
+    // Pulse intensity
+    const pulseInterval = setInterval(() => {
+      setPulseIntensity(prev => prev === 1 ? 1.15 : 1);
+    }, 1200);
+
+    // Dynamic particles
+    const particleInterval = setInterval(() => {
+      setParticleCount(prev => prev === 8 ? 12 : 8);
+    }, 3000);
+
+    return () => {
+      clearInterval(stepInterval);
+      clearInterval(progressInterval);
+      clearInterval(pulseInterval);
+      clearInterval(particleInterval);
+    };
+  }, [loading]);
+
+  // Reset animation state when loading starts
+  useEffect(() => {
+    if (loading) {
+      setCurrentStep(0);
+      setProgress(0);
+      setPulseIntensity(1);
+      setParticleCount(8);
+    }
+  }, [loading]);
 
   const toggleChunkExpansion = (index: number) => {
     setExpandedChunks((prev) => {
@@ -335,128 +386,229 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
     },
   };
 
-  // --- Professional Loading Animation Component ---
-  const renderLoadingAnimation = () => (
-    <div className="h-full flex items-center justify-center">
-      <div className="text-center max-w-md mx-auto">
-        {/* Main Loading Animation */}
-        <div className="relative mb-8">
-          {/* Central Neural Network Hub */}
-          <div className="w-24 h-24 mx-auto relative">
-            {/* Core pulse */}
-            <div className="absolute inset-0 glassmorphism-card rounded-full flex items-center justify-center animate-pulse-glow">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-400 via-cyan-400 to-purple-400 rounded-full flex items-center justify-center shadow-2xl">
-                <MagnifyingGlassIcon className="w-6 h-6 text-white animate-search-rotate" />
-              </div>
-            </div>
-            
-            {/* Orbiting data nodes */}
-            <div className="absolute inset-0 animate-orbit-slow">
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2">
-                <div className="w-3 h-3 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-pulse-node" />
-              </div>
-            </div>
-            <div className="absolute inset-0 animate-orbit-medium" style={{ animationDelay: '0.5s' }}>
-              <div className="absolute top-1/2 right-0 transform translate-x-2 -translate-y-1/2">
-                <div className="w-2.5 h-2.5 bg-gradient-to-r from-orange-400 to-amber-400 rounded-full animate-pulse-node" />
-              </div>
-            </div>
-            <div className="absolute inset-0 animate-orbit-fast" style={{ animationDelay: '1s' }}>
-              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-2">
-                <div className="w-3.5 h-3.5 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-pulse-node" />
-              </div>
-            </div>
-            <div className="absolute inset-0 animate-orbit-slow" style={{ animationDelay: '1.5s' }}>
-              <div className="absolute top-1/2 left-0 transform -translate-x-2 -translate-y-1/2">
-                <div className="w-2 h-2 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-pulse-node" />
-              </div>
-            </div>
-            
-            {/* Scanning rings */}
-            <div className="absolute inset-0 animate-scan-ring">
-              <div className="w-full h-full border-2 border-blue-400/30 rounded-full" />
-            </div>
-            <div className="absolute inset-0 animate-scan-ring" style={{ animationDelay: '1s' }}>
-              <div className="w-full h-full border-2 border-purple-400/20 rounded-full" />
-            </div>
-          </div>
-          
-          {/* Knowledge Stream Visualization */}
-          <div className="absolute -inset-8 pointer-events-none">
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-1 h-8 bg-gradient-to-t from-transparent via-blue-400/60 to-transparent rounded-full animate-knowledge-stream"
-                style={{
-                  left: `${20 + i * 12}%`,
-                  animationDelay: `${i * 0.3}s`,
-                  transform: 'rotate(45deg)'
-                }}
-              />
-            ))}
-          </div>
+  // --- Dynamic Professional Loading Animation Component ---
+  const renderLoadingAnimation = () => {
+    const steps = [
+      { icon: '🧠', text: 'Analyzing Infrastructure as Code patterns', color: 'from-blue-400 to-cyan-400' },
+      { icon: '🔍', text: 'Querying vector database for best practices', color: 'from-purple-400 to-pink-400' },
+      { icon: '⚡', text: 'RAG agent retrieving relevant examples', color: 'from-emerald-400 to-teal-400' },
+      { icon: '📚', text: 'Ranking conversion patterns by relevance', color: 'from-orange-400 to-amber-400' }
+    ];
+
+    return (
+      <div className="h-full flex items-center justify-center relative overflow-hidden">
+        {/* Animated Background Matrix */}
+        <div className="absolute inset-0">
+          {[...Array(particleCount)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 bg-gradient-to-r from-blue-400/60 to-purple-400/60 rounded-full animate-matrix-float"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${4 + Math.random() * 6}s`
+              }}
+            />
+          ))}
         </div>
 
-        {/* Dynamic Status Text */}
-        <div className="space-y-4">
-          <div className="glassmorphism-card rounded-2xl p-6 border border-blue-500/20 animate-fade-in-up">
-            <h3 className="text-white/90 text-xl font-semibold mb-3 flex items-center justify-center gap-2">
-              <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-              Context Discovery in Progress
-            </h3>
-            
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-3 text-white/70 animate-slide-in" style={{ animationDelay: '0.2s' }}>
-                <div className="w-5 h-5 glassmorphism-card rounded-lg flex items-center justify-center">
-                  <span className="text-xs">🧠</span>
+        {/* Data Connection Lines */}
+        <div className="absolute inset-0 pointer-events-none">
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={`line-${i}`}
+              className="absolute w-px h-20 bg-gradient-to-b from-transparent via-cyan-400/30 to-transparent animate-data-flow"
+              style={{
+                left: `${25 + i * 16}%`,
+                top: '20%',
+                animationDelay: `${i * 0.8}s`,
+                transform: `rotate(${15 + i * 30}deg)`
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="text-center max-w-lg mx-auto px-6 relative z-10">
+          {/* Central Neural Network Hub - Enhanced */}
+          <div className="relative mb-8">
+            <div className="w-32 h-32 mx-auto relative">
+              {/* Core pulsing hub */}
+              <div 
+                className="absolute inset-0 glassmorphism-card rounded-full flex items-center justify-center animate-neural-pulse shadow-2xl"
+                style={{ transform: `scale(${pulseIntensity})` }}
+              >
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-400 via-cyan-400 to-purple-400 rounded-full flex items-center justify-center shadow-2xl relative overflow-hidden">
+                  <MagnifyingGlassIcon className="w-8 h-8 text-white animate-search-rotate relative z-10" />
+                  {/* Inner shimmer effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
                 </div>
-                <span>Analyzing your Infrastructure as Code patterns</span>
               </div>
               
-              <div className="flex items-center gap-3 text-white/70 animate-slide-in" style={{ animationDelay: '0.4s' }}>
-                <div className="w-5 h-5 glassmorphism-card rounded-lg flex items-center justify-center">
-                  <span className="text-xs">🔍</span>
-                </div>
-                <span>Querying vector database for best practices</span>
-              </div>
+              {/* Dynamic orbital rings */}
+              {[...Array(3)].map((_, ringIndex) => (
+                <div 
+                  key={`ring-${ringIndex}`}
+                  className={`absolute border-2 border-dashed rounded-full animate-ring-rotate-${ringIndex + 1}`}
+                  style={{
+                    inset: `${ringIndex * 8}px`,
+                    borderColor: `rgba(${ringIndex === 0 ? '59, 130, 246' : ringIndex === 1 ? '168, 85, 247' : '34, 197, 94'}, 0.3)`,
+                    animationDuration: `${8 - ringIndex * 2}s`
+                  }}
+                />
+              ))}
               
-              <div className="flex items-center gap-3 text-white/70 animate-slide-in" style={{ animationDelay: '0.6s' }}>
-                <div className="w-5 h-5 glassmorphism-card rounded-lg flex items-center justify-center">
-                  <span className="text-xs">⚡</span>
+              {/* Enhanced orbiting data nodes */}
+              {[...Array(6)].map((_, nodeIndex) => (
+                <div 
+                  key={`node-${nodeIndex}`}
+                  className={`absolute animate-orbit-dynamic-${nodeIndex % 3}`}
+                  style={{
+                    inset: `${20 + (nodeIndex % 3) * 10}px`,
+                    animationDelay: `${nodeIndex * 0.5}s`
+                  }}
+                >
+                  <div 
+                    className={`absolute w-4 h-4 bg-gradient-to-r ${steps[nodeIndex % steps.length].color} rounded-full animate-node-pulse shadow-lg`}
+                    style={{
+                      top: nodeIndex % 2 === 0 ? '0' : 'auto',
+                      bottom: nodeIndex % 2 === 1 ? '0' : 'auto',
+                      left: '50%',
+                      transform: 'translateX(-50%)'
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-white/30 rounded-full animate-ping"></div>
+                  </div>
                 </div>
-                <span>RAG agent retrieving relevant examples</span>
-              </div>
+              ))}
               
-              <div className="flex items-center gap-3 text-white/70 animate-slide-in" style={{ animationDelay: '0.8s' }}>
-                <div className="w-5 h-5 glassmorphism-card rounded-lg flex items-center justify-center">
-                  <span className="text-xs">📚</span>
-                </div>
-                <span>Ranking conversion patterns by relevance</span>
-              </div>
-            </div>
-            
-            {/* Progress indicator */}
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <div className="flex justify-between text-xs text-white/50 mb-2">
-                <span>Processing...</span>
-                <span>Vector Search Active</span>
-              </div>
-              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 rounded-full animate-progress-bar"></div>
-              </div>
+              {/* Vector search waves */}
+              {[...Array(3)].map((_, waveIndex) => (
+                <div 
+                  key={`wave-${waveIndex}`}
+                  className="absolute inset-0 border-2 border-blue-400/20 rounded-full animate-vector-wave"
+                  style={{
+                    animationDelay: `${waveIndex * 1}s`,
+                    animationDuration: '3s'
+                  }}
+                />
+              ))}
             </div>
           </div>
-          
-          {/* Technical Details */}
-          <div className="text-white/50 text-xs space-y-1 animate-fade-in" style={{ animationDelay: '1s' }}>
-            <p>🎯 Semantic similarity matching using embeddings</p>
-            <p>🔄 Real-time knowledge retrieval from curated database</p>
-            <p>⭐ Filtering for highest quality conversion patterns</p>
+
+          {/* Enhanced Status Display */}
+          <div className="space-y-6">
+            <div className="glassmorphism-card rounded-2xl p-6 border border-blue-500/20 animate-fade-in-up relative overflow-hidden">
+              {/* Background pattern */}
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-cyan-500/20 animate-gradient-shift"></div>
+              </div>
+              
+              <div className="relative z-10">
+                <h3 className="text-white/90 text-xl font-semibold mb-4 flex items-center justify-center gap-3">
+                  <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
+                  Context Discovery in Progress
+                  <div className="w-3 h-3 bg-purple-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                </h3>
+                
+                {/* Dynamic step display */}
+                <div className="space-y-4">
+                  {steps.map((step, index) => (
+                    <div 
+                      key={index}
+                      className={`flex items-center gap-4 p-3 rounded-xl transition-all duration-700 ${
+                        index === currentStep 
+                          ? `bg-gradient-to-r ${step.color}/20 border-2 border-current scale-105 shadow-lg` 
+                          : index < currentStep
+                          ? 'bg-green-500/10 border border-green-500/30'
+                          : 'bg-gray-800/30 border border-gray-600/30'
+                      }`}
+                    >
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${
+                        index === currentStep 
+                          ? `bg-gradient-to-r ${step.color} text-white animate-bounce-subtle shadow-lg`
+                          : index < currentStep
+                          ? 'bg-green-500 text-white'
+                          : 'bg-gray-600 text-gray-300'
+                      }`}>
+                        {index < currentStep ? (
+                          <CheckCircleIcon className="w-5 h-5" />
+                        ) : (
+                          <span className="text-lg">{step.icon}</span>
+                        )}
+                      </div>
+                      
+                      <span className={`text-sm font-medium transition-all duration-500 ${
+                        index === currentStep 
+                          ? 'text-white' 
+                          : index < currentStep 
+                          ? 'text-green-300'
+                          : 'text-gray-400'
+                      }`}>
+                        {step.text}
+                      </span>
+
+                      {/* Real-time indicator */}
+                      {index === currentStep && (
+                        <div className="flex gap-1 ml-auto">
+                          {[...Array(3)].map((_, i) => (
+                            <div 
+                              key={i}
+                              className="w-1.5 h-1.5 bg-white rounded-full animate-bounce"
+                              style={{ animationDelay: `${i * 0.15}s` }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Enhanced progress indicator */}
+                <div className="mt-6 pt-4 border-t border-white/10">
+                  <div className="flex justify-between text-xs text-white/60 mb-3">
+                    <span className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      Vector Search Active
+                    </span>
+                    <span>{Math.round(progress)}% Complete</span>
+                  </div>
+                  <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden relative">
+                    <div 
+                      className="h-full bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 rounded-full transition-all duration-500 relative"
+                      style={{ width: `${progress}%` }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Technical metrics with animation */}
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: 'Embeddings', value: 'Active', color: 'text-blue-400' },
+                { label: 'Similarity', value: `${Math.round(progress/10)}0%`, color: 'text-green-400' },
+                { label: 'Patterns', value: `${Math.round(progress/20)}`, color: 'text-purple-400' }
+              ].map((metric, index) => (
+                <div 
+                  key={metric.label}
+                  className="glassmorphism-card rounded-xl p-4 border border-gray-600/30 text-center animate-slide-in"
+                  style={{ animationDelay: `${1 + index * 0.2}s` }}
+                >
+                  <div className={`${metric.color} font-bold text-lg animate-count-up`}>
+                    {metric.value}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">{metric.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // --- Glass Morphism Catalog Cards ---
   const renderResults = () => {
@@ -967,15 +1119,15 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
           animation: fade-in 0.3s ease-out;
         }
         
-        /* Advanced Loading Animations */
-        @keyframes pulse-glow {
+        /* Enhanced Loading Animations - More Dynamic */
+        @keyframes neural-pulse {
           0%, 100% { 
             transform: scale(1);
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
           }
           50% { 
-            transform: scale(1.05);
-            box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+            transform: scale(1.08);
+            box-shadow: 0 0 50px rgba(59, 130, 246, 0.8);
           }
         }
         
@@ -984,132 +1136,184 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
           100% { transform: rotate(360deg); }
         }
         
-        @keyframes orbit-slow {
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        
+        @keyframes matrix-float {
+          0%, 100% { 
+            transform: translateY(0px) translateX(0px) rotate(0deg); 
+            opacity: 0.3; 
+          }
+          25% { 
+            transform: translateY(-20px) translateX(10px) rotate(90deg); 
+            opacity: 0.8; 
+          }
+          50% { 
+            transform: translateY(-40px) translateX(-5px) rotate(180deg); 
+            opacity: 1; 
+          }
+          75% { 
+            transform: translateY(-20px) translateX(-15px) rotate(270deg); 
+            opacity: 0.6; 
+          }
+        }
+        
+        @keyframes data-flow {
+          0% { 
+            transform: translateY(100px) rotate(15deg);
+            opacity: 0;
+          }
+          50% { 
+            opacity: 1;
+          }
+          100% { 
+            transform: translateY(-100px) rotate(15deg);
+            opacity: 0;
+          }
+        }
+        
+        @keyframes ring-rotate-1 {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
         
-        @keyframes orbit-medium {
+        @keyframes ring-rotate-2 {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(-360deg); }
         }
         
-        @keyframes orbit-fast {
+        @keyframes ring-rotate-3 {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(180deg); }
+        }
+        
+        @keyframes orbit-dynamic-0 {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes orbit-dynamic-1 {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(-360deg); }
+        }
+        
+        @keyframes orbit-dynamic-2 {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(720deg); }
         }
         
-        @keyframes pulse-node {
+        @keyframes node-pulse {
           0%, 100% { 
-            opacity: 0.6;
             transform: scale(1);
+            opacity: 0.8;
           }
           50% { 
+            transform: scale(1.3);
             opacity: 1;
-            transform: scale(1.2);
           }
         }
         
-        @keyframes scan-ring {
+        @keyframes vector-wave {
           0% { 
             transform: scale(1);
             opacity: 0.8;
           }
           50% { 
-            transform: scale(1.5);
+            transform: scale(1.8);
             opacity: 0.3;
           }
           100% { 
-            transform: scale(2);
+            transform: scale(2.5);
             opacity: 0;
           }
         }
         
-        @keyframes knowledge-stream {
-          0% { 
-            opacity: 0;
-            transform: translateY(40px) rotate(45deg);
+        @keyframes bounce-subtle {
+          0%, 100% { 
+            transform: translateY(0px);
           }
           50% { 
-            opacity: 1;
-            transform: translateY(0px) rotate(45deg);
-          }
-          100% { 
-            opacity: 0;
-            transform: translateY(-40px) rotate(45deg);
+            transform: translateY(-4px);
           }
         }
         
-        @keyframes progress-bar {
-          0% { width: 0%; }
-          50% { width: 60%; }
-          100% { width: 100%; }
+        @keyframes gradient-shift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
         
-        @keyframes fade-in-up {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        @keyframes count-up {
+          0% { transform: scale(0.8); opacity: 0.5; }
+          50% { transform: scale(1.1); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
         }
         
-        @keyframes slide-in {
-          from {
-            opacity: 0;
-            transform: translateX(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        
-        .animate-pulse-glow {
-          animation: pulse-glow 2s ease-in-out infinite;
+        .animate-neural-pulse {
+          animation: neural-pulse 2.5s ease-in-out infinite;
         }
         
         .animate-search-rotate {
-          animation: search-rotate 3s linear infinite;
+          animation: search-rotate 4s linear infinite;
         }
         
-        .animate-orbit-slow {
-          animation: orbit-slow 8s linear infinite;
+        .animate-shimmer {
+          animation: shimmer 2s ease-in-out infinite;
         }
         
-        .animate-orbit-medium {
-          animation: orbit-medium 6s linear infinite;
+        .animate-matrix-float {
+          animation: matrix-float 6s ease-in-out infinite;
         }
         
-        .animate-orbit-fast {
-          animation: orbit-fast 4s linear infinite;
+        .animate-data-flow {
+          animation: data-flow 3s ease-in-out infinite;
         }
         
-        .animate-pulse-node {
-          animation: pulse-node 2s ease-in-out infinite;
+        .animate-ring-rotate-1 {
+          animation: ring-rotate-1 8s linear infinite;
         }
         
-        .animate-scan-ring {
-          animation: scan-ring 3s ease-out infinite;
+        .animate-ring-rotate-2 {
+          animation: ring-rotate-2 6s linear infinite;
         }
         
-        .animate-knowledge-stream {
-          animation: knowledge-stream 2s ease-in-out infinite;
+        .animate-ring-rotate-3 {
+          animation: ring-rotate-3 4s linear infinite;
         }
         
-        .animate-progress-bar {
-          animation: progress-bar 3s ease-out infinite;
+        .animate-orbit-dynamic-0 {
+          animation: orbit-dynamic-0 8s linear infinite;
         }
         
-        .animate-fade-in-up {
-          animation: fade-in-up 0.8s ease-out;
+        .animate-orbit-dynamic-1 {
+          animation: orbit-dynamic-1 6s linear infinite;
         }
         
-        .animate-slide-in {
-          animation: slide-in 0.6s ease-out both;
+        .animate-orbit-dynamic-2 {
+          animation: orbit-dynamic-2 4s linear infinite;
+        }
+        
+        .animate-node-pulse {
+          animation: node-pulse 2s ease-in-out infinite;
+        }
+        
+        .animate-vector-wave {
+          animation: vector-wave 3s ease-out infinite;
+        }
+        
+        .animate-bounce-subtle {
+          animation: bounce-subtle 1s ease-in-out infinite;
+        }
+        
+        .animate-gradient-shift {
+          background-size: 200% 200%;
+          animation: gradient-shift 4s ease-in-out infinite;
+        }
+        
+        .animate-count-up {
+          animation: count-up 0.8s ease-out;
         }
       `}</style>
     </div>

@@ -5,8 +5,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ClipboardDocumentIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   PlayIcon,
   DocumentTextIcon,
   Cog6ToothIcon,
@@ -14,146 +12,56 @@ import {
   EyeSlashIcon,
   CodeBracketIcon,
   InformationCircleIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  SparklesIcon,
+  BoltIcon,
+  WrenchScrewdriverIcon,
+  BeakerIcon,
+  ChevronRightIcon,
+  ChevronDownIcon
 } from "@heroicons/react/24/outline";
 
-// --- Types ---
 interface ValidationPanelProps {
   playbook?: string;
   validationConfig?: unknown;
   onLogMessage?: (msg: string) => void;
-  onValidationComplete?: (result: ValidationResult) => void;
+  onValidationComplete?: (result: unknown) => void;
   selectedProfile?: string;
 }
 
-interface ValidationIssue {
-  severity?: string;
+// Enhanced types for streaming validation
+interface ValidationStep {
+  step: number;
+  agent_action: 'lint' | 'llm_fix';
+  summary: string;
+  code: string;
   message?: string;
-  rule?: string;
-  filename?: string;
-  line?: number;
-  column?: number;
-  level?: string;
-  tag?: string[];
-  description?: string;
-  [key: string]: unknown;
+  timestamp?: number;
 }
 
-interface ValidationResult {
+interface StreamingValidationResult {
   passed: boolean;
-  summary: unknown;
-  issues: ValidationIssue[];
-  raw_output: string | { stdout?: string; stderr?: string };
-  raw_stdout?: string;
-  raw_stderr?: string;
+  final_code: string;
+  original_code: string;
+  steps: ValidationStep[];
+  total_steps: number;
+  summary: {
+    fixes_applied: number;
+    lint_iterations: number;
+    final_status: 'passed' | 'failed';
+  };
+  duration_ms?: number;
+  // Legacy compatibility
+  issues: unknown[];
+  raw_output: string;
   debug_info: {
-    status?: string;
-    playbook_length?: number;
-    num_issues?: number;
-    error_count?: number;
-    warning_count?: number;
-    info_count?: number;
-    exit_code?: number;
-    profile_used?: string;
+    status: string;
+    playbook_length: number;
+    steps_completed: number;
     [key: string]: unknown;
   };
   error_message?: string;
 }
-
-// --- Utilities ---
-function cleanPlaybook(yamlText: string): string {
-  if (!yamlText) return '';
-  const lines = yamlText.trim().split('\n').filter(Boolean);
-  let idx = 0;
-  while (idx < lines.length && (lines[idx].trim() === '---' || lines[idx].trim() === "''---")) {
-    idx++;
-  }
-  return `---\n${lines.slice(idx).join('\n')}`;
-}
-
-const isValidationResult = (data: unknown): boolean => {
-  return data && (
-    data.passed !== undefined ||
-    data.summary !== undefined ||
-    data.issues !== undefined ||
-    (data.tool === "lint_ansible_playbook" && data.output)
-  );
-};
-
-const transformBackendResponse = (data: unknown, playbookLength: number = 0): ValidationResult => {
-  // Handle backend tool execution format
-  if (data.tool === "lint_ansible_playbook" && data.output) {
-    const output = data.output;
-    const summary = output.summary || {};
-    
-    return {
-      passed: summary.passed || false,
-      summary: summary,
-      issues: output.issues || [],
-      raw_output: output.raw_output || "",
-      debug_info: {
-        status: summary.passed ? "passed" : "failed",
-        playbook_length: playbookLength,
-        exit_code: summary.exit_code,
-        profile_used: summary.profile_used,
-        issue_count: summary.issue_count || 0,
-        error_count: summary.error_count || 0,
-        warning_count: summary.warning_count || 0,
-        ...summary
-      },
-      error_message: summary.passed ? undefined : extractErrorFromOutput(output.raw_output)
-    };
-  }
-  
-  // Handle direct validation result format
-  if (data.passed !== undefined || data.summary !== undefined) {
-    return {
-      passed: data.passed || false,
-      summary: data.summary || {},
-      issues: data.issues || [],
-      raw_output: data.raw_output || "",
-      raw_stdout: data.raw_stdout,
-      raw_stderr: data.raw_stderr,
-      debug_info: {
-        status: data.passed ? "passed" : "failed",
-        playbook_length: playbookLength,
-        ...data.debug_info
-      },
-      error_message: data.error_message
-    };
-  }
-  
-  // Fallback for unknown format
-  return {
-    passed: false,
-    summary: "Unknown response format",
-    issues: [],
-    raw_output: JSON.stringify(data, null, 2),
-    debug_info: {
-      status: "error",
-      playbook_length: playbookLength,
-      error_count: 1
-    },
-    error_message: "Received unexpected response format from validation service"
-  };
-};
-
-const extractErrorFromOutput = (rawOutput: unknown): string => {
-  if (typeof rawOutput === 'string') {
-    return rawOutput.trim();
-  }
-  
-  if (typeof rawOutput === 'object' && rawOutput) {
-    if (rawOutput.stderr && rawOutput.stderr.trim()) {
-      return rawOutput.stderr.trim();
-    }
-    if (rawOutput.stdout && rawOutput.stdout.trim()) {
-      return rawOutput.stdout.trim();
-    }
-  }
-  
-  return "Validation failed - check raw output for details";
-};
 
 const ValidationPanel: React.FC<ValidationPanelProps> = ({
   playbook = "",
@@ -162,21 +70,26 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   onValidationComplete,
   selectedProfile = 'production'
 }) => {
-  // --- Local State ---
-  const [result, setResult] = useState<ValidationResult | null>(null);
+  // Enhanced state for streaming validation
+  const [result, setResult] = useState<StreamingValidationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasValidated, setHasValidated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
-  const [expandedIssues, setExpandedIssues] = useState<Set<number>>(new Set());
+  const [streamingActive, setStreamingActive] = useState(false);
+  const [currentStep, setCurrentStep] = useState<ValidationStep | null>(null);
+  const [steps, setSteps] = useState<ValidationStep[]>([]);
+  
+  // UI state
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [showRawOutput, setShowRawOutput] = useState(false);
-  const [showDetailedReport, setShowDetailedReport] = useState(false);
-  const [activeReportTab, setActiveReportTab] = useState<'summary' | 'issues' | 'raw' | 'debug'>('summary');
-  const [expandedReportSections, setExpandedReportSections] = useState<Set<string>>(new Set());
+  const [showCodeComparison, setShowCodeComparison] = useState(false);
+  
   const hasLoggedInit = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const startTimeRef = useRef<number>(0);
 
-  // --- Logging ---
+  // Logging
   const logMessage = useCallback(
     (message: string) => {
       if (onLogMessage) onLogMessage(message);
@@ -185,13 +98,20 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     [onLogMessage]
   );
 
-  // --- Effects ---
+  // Effects
   useEffect(() => {
     if (!hasLoggedInit.current && playbook && playbook.trim()) {
-      logMessage("🛡️ Validation Panel initialized");
+      logMessage("🛡️ Enhanced Validation Panel initialized");
       hasLoggedInit.current = true;
     }
   }, [logMessage, playbook]);
+
+  useEffect(() => {
+    if (result && onValidationComplete) {
+      onValidationComplete(result);
+      logMessage(`✅ Validation completed: ${result.passed ? 'PASSED' : 'COMPLETED'} with ${result.summary.fixes_applied} fixes`);
+    }
+  }, [result, onValidationComplete, logMessage]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -202,61 +122,44 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     };
   }, []);
 
-  // Sync validation result with parent callback
-  useEffect(() => {
-    if (result && onValidationComplete) {
-      onValidationComplete(result);
-      logMessage(` Validation completed: ${result.passed ? 'PASSED' : 'FAILED'}`);
-    }
-  }, [result, onValidationComplete, logMessage]);
-
-  // --- Event Handlers ---
-  const resetValidation = () => {
-    setResult(null);
-    setError(null);
-    setProgress(null);
-    setLoading(false);
-    setHasValidated(false);
-    setExpandedIssues(new Set());
-    setShowRawOutput(false);
-    setShowDetailedReport(false);
-    
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-  };
-
+  // Enhanced validation function with streaming support
   const handleValidation = useCallback(async () => {
     if (!playbook || !playbook.trim()) {
       setError("No playbook content to validate");
-      logMessage(" Error: No playbook content");
+      logMessage("❌ Error: No playbook content");
       return;
     }
 
     // Reset state
-    resetValidation();
+    setResult(null);
+    setError(null);
+    setProgress(null);
     setLoading(true);
     setHasValidated(true);
+    setStreamingActive(true);
+    setCurrentStep(null);
+    setSteps([]);
+    startTimeRef.current = Date.now();
 
-    // Create abort controller for this request
+    // Create abort controller
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Add timeout to prevent infinite hanging
+    // Add timeout
     const timeoutId = setTimeout(() => {
       abortController.abort();
       setError("Validation timed out after 2 minutes");
       setLoading(false);
+      setStreamingActive(false);
       setProgress(null);
       logMessage("⏱️ Validation timed out");
-    }, 120000); // 2 minutes timeout
+    }, 120000);
 
     try {
-      logMessage(`🚀 Starting validation with ${selectedProfile} profile...`);
-      setProgress("Initializing validation...");
+      logMessage(`🚀 Starting enhanced validation with ${selectedProfile} profile...`);
+      setProgress("Connecting to validation service...");
       
-      const cleanedPlaybook = cleanPlaybook(playbook);
+      const cleanedPlaybook = playbook.trim();
       
       const response = await fetch("/api/validate/playbook/stream", {
         method: "POST",
@@ -281,16 +184,15 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       const contentType = response.headers.get("content-type");
       
       if (contentType?.includes("application/json")) {
-        // Handle direct JSON response (non-streaming)
         setProgress("Processing validation results...");
         const data = await response.json();
         logMessage("📊 Received direct JSON response");
         
-        const transformedResult = transformBackendResponse(data, cleanedPlaybook.length);
-        setResult(transformedResult);
+        const enhancedResult = transformToStreamingResult(data, cleanedPlaybook, []);
+        setResult(enhancedResult);
         setLoading(false);
+        setStreamingActive(false);
         setProgress(null);
-        
         return;
       }
 
@@ -298,7 +200,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
         throw new Error(`Unexpected content type: ${contentType}`);
       }
 
-      // Handle streaming response with improved error handling
       if (!response.body) {
         throw new Error("No response body from backend");
       }
@@ -307,42 +208,26 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let collectedSteps: ValidationStep[] = [];
       let finalResult = null;
       let streamComplete = false;
-      
-      // Add stream timeout
-      const streamTimeoutId = setTimeout(() => {
-        reader.cancel();
-        throw new Error("Stream processing timed out");
-      }, 90000); // 90 seconds for stream processing
 
       try {
-        let iterationCount = 0;
-        const MAX_ITERATIONS = 1000; // Prevent infinite loops
-        
-        while (!streamComplete && iterationCount < MAX_ITERATIONS) {
-          iterationCount++;
-          
+        while (!streamComplete) {
           const { done, value } = await reader.read();
           
           if (done) {
-            logMessage("📊 Stream reading completed naturally");
+            logMessage("📊 Stream reading completed");
             streamComplete = true;
             break;
           }
           
-          if (!value) {
-            logMessage("⚠️ Received empty value from stream");
-            continue;
-          }
+          if (!value) continue;
           
           buffer += decoder.decode(value, { stream: true });
           
-          // Process complete lines
           const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-          
-          let shouldBreak = false;
+          buffer = lines.pop() || '';
           
           for (const line of lines) {
             const trimmedLine = line.trim();
@@ -351,50 +236,58 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
             try {
               let data;
               
-              // Handle SSE format
               if (trimmedLine.startsWith('data: ')) {
                 const dataStr = trimmedLine.slice(6);
                 if (dataStr === '[DONE]') {
                   logMessage("📊 Received [DONE] signal");
                   streamComplete = true;
-                  shouldBreak = true;
                   break;
                 }
                 data = JSON.parse(dataStr);
               } else {
-                // Try parsing as direct JSON
                 data = JSON.parse(trimmedLine);
               }
 
-              // Handle different message types
-              if (data.type === "progress" && data.message) {
-                setProgress(data.message);
-                logMessage(`⚡ Progress: ${data.message}`);
+              // Handle progress messages
+              if (data.type === "progress") {
+                const step: ValidationStep = {
+                  step: data.step || collectedSteps.length + 1,
+                  agent_action: data.agent_action || 'lint',
+                  summary: data.summary || data.message || '',
+                  code: data.code || '',
+                  message: data.message,
+                  timestamp: Date.now(),
+                };
+
+                collectedSteps.push(step);
+                setSteps(prev => [...prev, step]);
+                setCurrentStep(step);
+                
+                const action = step.agent_action === 'lint' ? '🔍 Analyzing' : '🔧 Fixing';
+                setProgress(`${action} Step ${step.step}...`);
+                logMessage(`${action} Step ${step.step}: ${step.message || 'Processing'}`);
               } 
               else if (data.type === "final_result" && data.data) {
-                logMessage("📊 Received final_result event");
+                logMessage("📊 Received final result");
                 finalResult = data.data;
                 streamComplete = true;
-                shouldBreak = true;
                 break;
               } 
               else if (data.type === "error") {
                 throw new Error(data.message || "Validation error occurred");
               }
-              // Handle backend tool execution format
+              // Handle tool execution format
               else if (data.tool === "lint_ansible_playbook" && data.output) {
                 logMessage("📊 Received tool execution result");
                 finalResult = data;
                 streamComplete = true;
-                shouldBreak = true;
                 break;
               }
-              // Handle direct validation result format
-              else if (isValidationResult(data)) {
+              // Handle direct result format
+              else if (data.passed !== undefined || data.final_code !== undefined) {
                 logMessage("📊 Received direct validation result");
                 finalResult = data;
                 streamComplete = true;
-                shouldBreak = true;
                 break;
               }
             } catch (parseError) {
@@ -402,28 +295,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
               continue;
             }
           }
-          
-          // Break outer loop if needed
-          if (shouldBreak) {
-            break;
-          }
-          
-          // Additional safety check
-          if (finalResult) {
-            streamComplete = true;
-            break;
-          }
         }
-        
-        clearTimeout(streamTimeoutId);
-        
-        if (iterationCount >= MAX_ITERATIONS) {
-          throw new Error("Stream processing exceeded maximum iterations");
-        }
-        
-      } catch (streamError) {
-        clearTimeout(streamTimeoutId);
-        throw streamError;
       } finally {
         try {
           reader.releaseLock();
@@ -434,13 +306,27 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
       // Process final result
       if (finalResult) {
-        logMessage(" Validation completed successfully");
-        const transformedResult = transformBackendResponse(finalResult, cleanedPlaybook.length);
-        setResult(transformedResult);
+        const enhancedResult = transformToStreamingResult(finalResult, cleanedPlaybook, collectedSteps);
+        setResult(enhancedResult);
         setLoading(false);
+        setStreamingActive(false);
+        setProgress(null);
+        logMessage("✅ Validation completed successfully");
+      } else if (collectedSteps.length > 0) {
+        // Create result from collected steps
+        const lastStep = collectedSteps[collectedSteps.length - 1];
+        const mockResult = {
+          passed: lastStep.summary.includes('No issues'),
+          final_code: lastStep.code || cleanedPlaybook,
+          steps: collectedSteps,
+        };
+        
+        const enhancedResult = transformToStreamingResult(mockResult, cleanedPlaybook, collectedSteps);
+        setResult(enhancedResult);
+        setLoading(false);
+        setStreamingActive(false);
         setProgress(null);
       } else {
-        // If we reach here without a result, treat it as an error
         throw new Error("Stream ended without providing validation result");
       }
       
@@ -453,41 +339,86 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       }
       
       const errorMessage = err.message || "Validation failed";
-      logMessage(` Validation error: ${errorMessage}`);
+      logMessage(`❌ Validation error: ${errorMessage}`);
       setError(errorMessage);
       setLoading(false);
+      setStreamingActive(false);
       setProgress(null);
       setHasValidated(false);
     }
   }, [playbook, selectedProfile, logMessage]);
 
+  // Helper function to transform backend response to enhanced result
+  const transformToStreamingResult = (data: any, originalCode: string, streamSteps: ValidationStep[]): StreamingValidationResult => {
+    const steps = data.steps || streamSteps || [];
+    const finalCode = data.final_code || originalCode;
+    const duration = startTimeRef.current ? Date.now() - startTimeRef.current : undefined;
+    
+    const lintSteps = steps.filter((s: ValidationStep) => s.agent_action === 'lint');
+    const fixSteps = steps.filter((s: ValidationStep) => s.agent_action === 'llm_fix');
+    
+    return {
+      passed: data.passed || false,
+      final_code: finalCode,
+      original_code: originalCode,
+      steps: steps,
+      total_steps: steps.length,
+      duration_ms: duration,
+      summary: {
+        fixes_applied: fixSteps.length,
+        lint_iterations: lintSteps.length,
+        final_status: data.passed ? 'passed' : 'failed',
+      },
+      // Legacy compatibility
+      issues: steps.filter((s: ValidationStep) => s.agent_action === 'lint' && s.summary.includes('Failed')),
+      raw_output: steps.map((s: ValidationStep) => `Step ${s.step} (${s.agent_action}): ${s.summary}`).join('\n\n'),
+      debug_info: {
+        status: data.passed ? "passed" : "failed",
+        playbook_length: originalCode.length,
+        steps_completed: steps.length,
+        lint_iterations: lintSteps.length,
+        fixes_applied: fixSteps.length,
+      },
+      error_message: data.passed ? undefined : "Validation completed with fixes applied",
+    };
+  };
+
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       setLoading(false);
+      setStreamingActive(false);
       setProgress(null);
       logMessage("🚫 Validation cancelled by user");
     }
   }, [logMessage]);
 
   const handleReset = useCallback(() => {
-    resetValidation();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    setResult(null);
+    setError(null);
+    setProgress(null);
+    setLoading(false);
+    setStreamingActive(false);
+    setHasValidated(false);
+    setCurrentStep(null);
+    setSteps([]);
+    setExpandedSteps(new Set());
+    setShowRawOutput(false);
+    setShowCodeComparison(false);
+    abortControllerRef.current = null;
+    
     logMessage("🔄 Validation state reset");
   }, [logMessage]);
 
-  // --- UI Helper Functions ---
-  const toggleIssueExpansion = (index: number) => {
-    setExpandedIssues((prev) => {
+  // UI Helper Functions
+  const toggleStepExpansion = (uniqueKey: string) => {
+    setExpandedSteps(prev => {
       const copy = new Set(prev);
-      copy.has(index) ? copy.delete(index) : copy.add(index);
-      return copy;
-    });
-  };
-
-  const toggleReportSection = (section: string) => {
-    setExpandedReportSections((prev) => {
-      const copy = new Set(prev);
-      copy.has(section) ? copy.delete(section) : copy.add(section);
+      copy.has(uniqueKey) ? copy.delete(uniqueKey) : copy.add(uniqueKey);
       return copy;
     });
   };
@@ -497,34 +428,35 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       await navigator.clipboard.writeText(text);
       logMessage("📋 Copied to clipboard");
     } catch {
-      logMessage(" Failed to copy to clipboard");
+      logMessage("❌ Failed to copy to clipboard");
     }
   };
 
-  const getSeverityIcon = (severity: string) => {
-    switch (severity?.toLowerCase()) {
-      case 'error': case 'high':
-        return <XCircleIcon className="w-4 h-4 text-red-400" />;
-      case 'warning': case 'medium':
-        return <ExclamationTriangleIcon className="w-4 h-4 text-amber-400" />;
-      case 'info': case 'low':
-        return <InformationCircleIcon className="w-4 h-4 text-blue-400" />;
+  const getStepIcon = (action: string, isActive: boolean = false) => {
+    const baseClasses = `w-5 h-5 ${isActive ? 'animate-pulse' : ''}`;
+    
+    switch (action) {
+      case 'lint':
+        return <BeakerIcon className={`${baseClasses} text-blue-400`} />;
+      case 'llm_fix':
+        return <WrenchScrewdriverIcon className={`${baseClasses} text-purple-400`} />;
       default:
-        return <ExclamationTriangleIcon className="w-4 h-4 text-slate-400" />;
+        return <InformationCircleIcon className={`${baseClasses} text-slate-400`} />;
     }
   };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity?.toLowerCase()) {
-      case 'error': case 'high':
-        return 'from-red-500/10 to-red-600/10 border-red-500/30';
-      case 'warning': case 'medium':
-        return 'from-amber-500/10 to-amber-600/10 border-amber-500/30';
-      case 'info': case 'low':
-        return 'from-blue-500/10 to-blue-600/10 border-blue-500/30';
-      default:
-        return 'from-slate-500/10 to-slate-600/10 border-slate-500/30';
+  const getStepStatusColor = (action: string, summary: string) => {
+    if (action === 'lint') {
+      if (summary.includes('No issues found') || summary.includes('No violations')) {
+        return 'from-green-500/20 to-emerald-500/20 border-green-500/30';
+      } else if (summary.includes('Failed') || summary.includes('violation')) {
+        return 'from-red-500/20 to-rose-500/20 border-red-500/30';
+      }
+      return 'from-blue-500/20 to-indigo-500/20 border-blue-500/30';
+    } else if (action === 'llm_fix') {
+      return 'from-purple-500/20 to-violet-500/20 border-purple-500/30';
     }
+    return 'from-slate-500/20 to-slate-600/20 border-slate-500/30';
   };
 
   const getProfileColor = (profile: string) => {
@@ -541,7 +473,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   const getProfileDisplayName = (profile: string) => {
     const names = {
       'minimal': 'Minimal',
-      'basic': 'Basic',
+      'basic': 'Basic', 
       'safety': 'Safety',
       'test': 'Test',
       'production': 'Production'
@@ -549,110 +481,38 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     return names[profile as keyof typeof names] || 'Production';
   };
 
-  // --- Helper: Extract error message ---
-  const extractLintErrorMessage = (result: unknown) => {
-    if (!result) return "";
-    
-    if (result.error_message?.trim()) return result.error_message.trim();
-    
-    if (typeof result.raw_output === "string" && result.raw_output.trim()) {
-      return result.raw_output.trim();
-    }
-    
-    if (typeof result.raw_output === "object" && result.raw_output) {
-      if (result.raw_output.stderr?.trim()) return result.raw_output.stderr.trim();
-      if (result.raw_output.stdout?.trim()) return result.raw_output.stdout.trim();
-    }
-    
-    if (result.raw_stderr?.trim()) return result.raw_stderr.trim();
-    
-    if (typeof result.summary === "string" && result.summary.toLowerCase().includes("error")) {
-      return result.summary.trim();
-    }
-    
-    return "";
-  };
-
-  // Helper to get issues by category
-  const getIssuesByCategory = () => {
-    const issues = result?.issues || [];
-    return {
-      errors: issues.filter((i: unknown) => (i.severity || i.level || '').toLowerCase() === 'error'),
-      warnings: issues.filter((i: unknown) => (i.severity || i.level || '').toLowerCase() === 'warning'),
-      info: issues.filter((i: unknown) => (i.severity || i.level || '').toLowerCase() === 'info'),
-      other: issues.filter((i: unknown) => !['error', 'warning', 'info'].includes((i.severity || i.level || '').toLowerCase()))
-    };
-  };
-
-  // Helper to format raw output
-  const formatRawOutput = (rawOutput: unknown) => {
-    if (typeof rawOutput === 'string') return rawOutput;
-    if (typeof rawOutput === 'object' && rawOutput) {
-      if (rawOutput.stdout && rawOutput.stderr) {
-        return `STDOUT:\n${rawOutput.stdout}\n\nSTDERR:\n${rawOutput.stderr}`;
-      }
-      if (rawOutput.stdout) return rawOutput.stdout;
-      if (rawOutput.stderr) return rawOutput.stderr;
-      return JSON.stringify(rawOutput, null, 2);
-    }
-    return 'No raw output available';
-  };
-
-  // --- Render Functions ---
+  // Render functions
   const renderValidationSummary = () => {
     if (!result) return null;
     
-    const { passed, issues = [], debug_info = {} } = result;
-    const errorMessage = extractLintErrorMessage(result);
+    const { passed, summary, total_steps, duration_ms } = result;
     
-    // If there are no issues but a lint error exists, show 1 error visually
-    const showVirtualError = !passed && (!issues || issues.length === 0) && errorMessage;
-    
-    const errorCount = showVirtualError
-      ? 1
-      : debug_info?.error_count ||
-        (issues && issues.filter((i: unknown) =>
-          (i.severity || i.level || "").toLowerCase() === "error"
-        ).length) ||
-        0;
-        
-    const warningCount = debug_info?.warning_count ||
-      (issues && issues.filter((i: unknown) =>
-        (i.severity || i.level || "").toLowerCase() === "warning"
-      ).length) ||
-      0;
-      
-    const infoCount = debug_info?.info_count ||
-      (issues && issues.filter((i: unknown) =>
-        (i.severity || i.level || "").toLowerCase() === "info"
-      ).length) ||
-      0;
-
     return (
       <div
-        className={`rounded-xl border p-6 ${
+        className={`rounded-xl border p-6 transition-all duration-500 ${
           passed
-            ? "bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/30"
-            : "bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/30"
+            ? "bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20"
+            : "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30 shadow-lg shadow-amber-500/20"
         }`}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
-            {passed ? (
-              <CheckCircleIcon className="w-8 h-8 text-emerald-400" />
-            ) : (
-              <XCircleIcon className="w-8 h-8 text-red-400" />
-            )}
+            <div className={`p-2 rounded-xl transition-all duration-300 ${passed ? 'bg-emerald-500/20' : 'bg-amber-500/20'}`}>
+              {passed ? (
+                <CheckCircleIcon className="w-8 h-8 text-emerald-400" style={{animation: 'bounce 1s ease-in-out'}} />
+              ) : (
+                <SparklesIcon className="w-8 h-8 text-amber-400" style={{animation: 'pulse 2s infinite'}} />
+              )}
+            </div>
             <div>
-              <h3 className={`font-bold text-xl ${passed ? "text-emerald-300" : "text-red-300"}`}>
-                {passed ? "Validation Passed" : "Validation Failed"}
+              <h3 className={`font-bold text-xl transition-colors duration-300 ${passed ? "text-emerald-300" : "text-amber-300"}`}>
+                {passed ? "✨ Validation Passed!" : "🔧 Issues Fixed Successfully!"}
               </h3>
               <div className="text-sm text-slate-400">
-                Profile: <span className="font-medium">{getProfileDisplayName(selectedProfile)}</span> • Analyzed:{" "}
-                <span className="font-medium">{debug_info?.playbook_length || playbook?.length || 0}</span> characters
-                {debug_info?.exit_code && (
-                  <span> • Exit Code: <span className="font-mono">{debug_info.exit_code}</span></span>
-                )}
+                Profile: <span className="font-medium text-white">{getProfileDisplayName(selectedProfile)}</span> • 
+                Steps: <span className="font-medium text-white">{total_steps}</span> • 
+                Fixes: <span className="font-medium text-purple-300">{summary.fixes_applied}</span>
+                {duration_ms && <span> • Duration: <span className="font-medium text-blue-300">{duration_ms}ms</span></span>}
               </div>
             </div>
           </div>
@@ -665,158 +525,216 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           </button>
         </div>
         
-        <div className="grid grid-cols-4 gap-4 mt-4">
-          <div className="text-center p-3 rounded-lg bg-slate-700/30 border border-slate-600/30">
-            <div className="text-slate-300 text-2xl font-bold">
-              {showVirtualError ? 1 : (issues?.length || 0)}
+        <div className="grid grid-cols-4 gap-4">
+          <div className="text-center p-4 rounded-lg bg-slate-700/30 border border-slate-600/30 transition-all duration-300 hover:bg-slate-700/50">
+            <div className="text-slate-300 text-2xl font-bold">{total_steps}</div>
+            <div className="text-xs text-slate-400">Total Steps</div>
+          </div>
+          <div className="text-center p-4 rounded-lg bg-purple-500/10 border border-purple-500/20 transition-all duration-300 hover:bg-purple-500/20">
+            <div className="text-purple-400 text-2xl font-bold">{summary.fixes_applied}</div>
+            <div className="text-xs text-slate-400">Fixes Applied</div>
+          </div>
+          <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 transition-all duration-300 hover:bg-blue-500/20">
+            <div className="text-blue-400 text-2xl font-bold">{summary.lint_iterations}</div>
+            <div className="text-xs text-slate-400">Lint Checks</div>
+          </div>
+          <div className="text-center p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 transition-all duration-300 hover:bg-emerald-500/20">
+            <div className={`text-2xl font-bold ${passed ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {passed ? '✓' : '🔧'}
             </div>
-            <div className="text-xs text-slate-400">Total Issues</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-            <div className="text-red-400 text-2xl font-bold">{errorCount}</div>
-            <div className="text-xs text-slate-400">Errors</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <div className="text-amber-400 text-2xl font-bold">{warningCount}</div>
-            <div className="text-xs text-slate-400">Warnings</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <div className="text-blue-400 text-2xl font-bold">{infoCount}</div>
-            <div className="text-xs text-slate-400">Info</div>
+            <div className="text-xs text-slate-400">Final Status</div>
           </div>
         </div>
-        
-        {/* Show virtual error (main error) in a prominent box */}
-        {showVirtualError && (
-          <div className="mt-4 p-4 rounded-lg bg-slate-900 border border-red-500/50">
-            <h4 className="text-red-300 font-semibold mb-2 flex items-center">
-              <ExclamationTriangleIcon className="w-4 h-4 mr-2" />
-              Validation Error
-            </h4>
-            <pre className="text-red-200 text-sm font-mono whitespace-pre-wrap overflow-x-auto">
-              {errorMessage}
-            </pre>
-          </div>
-        )}
       </div>
     );
   };
 
-  const renderIssues = () => {
-    if (!result || !result.issues || !Array.isArray(result.issues) || result.issues.length === 0) {
-      return null;
-    }
-
-    const issues = result.issues;
-    const categories = getIssuesByCategory();
-
-    const renderIssuesByCategory = (title: string, categoryIssues: unknown[], bgColor: string, textColor: string) => {
-      if (categoryIssues.length === 0) return null;
-
-      return (
-        <div key={title} className="space-y-3">
-          <button
-            onClick={() => toggleReportSection(title)}
-            className="flex items-center justify-between w-full p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors border border-slate-600/30"
-          >
-            <div className="flex items-center space-x-3">
-              <div className={`w-3 h-3 rounded-full ${bgColor}`}></div>
-              <span className={`font-semibold ${textColor}`}>{title}</span>
-              <span className="bg-slate-600/50 text-slate-300 px-2 py-1 rounded text-sm">
-                {categoryIssues.length}
-              </span>
-            </div>
-            {expandedReportSections.has(title) ? (
-              <ChevronDownIcon className="w-5 h-5 text-slate-400" />
-            ) : (
-              <ChevronRightIcon className="w-5 h-5 text-slate-400" />
-            )}
-          </button>
-
-          {expandedReportSections.has(title) && (
-            <div className="space-y-2 ml-6">
-              {categoryIssues.map((issue, idx) => (
-                <div key={idx} className={`p-4 rounded-lg border ${bgColor.replace('bg-', 'border-').replace('/40', '/30')} bg-slate-800/30`}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        {issue.rule && (
-                          <span className="text-xs bg-slate-600/50 text-slate-300 px-2 py-1 rounded font-mono">
-                            {issue.rule}
-                          </span>
-                        )}
-                        {issue.line && (
-                          <span className="text-xs text-slate-400">
-                            Line {issue.line}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-200 mb-2">
-                        {issue.message || issue.description || 'No description available'}
-                      </p>
-                      {issue.filename && (
-                        <p className="text-xs text-slate-400">
-                          File: {issue.filename}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => copyToClipboard(JSON.stringify(issue, null, 2))}
-                      className="text-slate-400 hover:text-slate-300 p-1"
-                      title="Copy issue details"
-                    >
-                      <ClipboardDocumentIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    };
+  const renderStreamingSteps = () => {
+    if (!steps || steps.length === 0) return null;
 
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-white flex items-center space-x-2">
-            <ExclamationTriangleIcon className="w-5 h-5 text-amber-400" />
-            <span>Issues Found ({issues.length})</span>
+            <BoltIcon className="w-5 h-5 text-yellow-400" />
+            <span>Validation Steps ({steps.length})</span>
+            {streamingActive && (
+              <div className="flex items-center space-x-2 ml-4">
+                <div className="w-2 h-2 bg-green-400 rounded-full" style={{animation: 'pulse 1s infinite'}}></div>
+                <span className="text-sm text-green-400">Live Stream</span>
+              </div>
+            )}
           </h4>
           <div className="flex items-center space-x-3">
             <button
-              onClick={() =>
-                copyToClipboard(
-                  issues
-                    .map(
-                      (i: unknown) =>
-                        `${(i.severity || i.level || 'INFO').toUpperCase()}: ${i.message || i.description || 'No description'} ${
-                          i.filename ? `(${i.filename}:${i.line})` : ""
-                        }`
-                    )
-                    .join("\n")
-                )
-              }
+              onClick={() => setExpandedSteps(new Set(steps.map((s, i) => `${s.step}-${s.agent_action}-${i}`)))}
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
             >
-              Copy All Issues
+              Expand All
             </button>
             <button
-              onClick={() =>
-                setExpandedReportSections(new Set(['Errors', 'Warnings', 'Info', 'Other']))
-              }
+              onClick={() => setExpandedSteps(new Set())}
               className="text-xs text-slate-400 hover:text-slate-300 transition-colors"
             >
-              Expand All
+              Collapse All
             </button>
           </div>
         </div>
         
-        <div className="max-h-[400px] overflow-y-auto pr-2 space-y-4">
-          {renderIssuesByCategory('Errors', categories.errors, 'bg-red-500/20', 'text-red-300')}
-          {renderIssuesByCategory('Warnings', categories.warnings, 'bg-amber-500/20', 'text-amber-300')}
-          {renderIssuesByCategory('Info', categories.info, 'bg-blue-500/20', 'text-blue-300')}
-          {renderIssuesByCategory('Other', categories.other, 'bg-slate-500/20', 'text-slate-300')}
+        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+          {steps.map((step, index) => {
+            // Create unique key using both index and step data to avoid duplicates
+            const uniqueKey = `${step.step}-${step.agent_action}-${index}`;
+            const isExpanded = expandedSteps.has(uniqueKey);
+            const isActive = currentStep?.step === step.step && streamingActive;
+            const isLint = step.agent_action === 'lint';
+            const isSuccess = isLint && (step.summary.includes('No issues') || step.summary.includes('No violations'));
+            const isError = isLint && (step.summary.includes('Failed') || step.summary.includes('violation'));
+            
+            return (
+              <div 
+                key={uniqueKey}
+                className={`rounded-lg border transition-all duration-500 ${
+                  isActive 
+                    ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/50 shadow-lg shadow-yellow-500/20' 
+                    : `bg-gradient-to-r ${getStepStatusColor(step.agent_action, step.summary)}`
+                } ${isActive ? 'transform scale-105' : ''}`}
+                style={isActive ? {animation: 'pulse 2s infinite'} : {}}
+              >
+                <button
+                  onClick={() => toggleStepExpansion(uniqueKey)}
+                  className="w-full p-4 text-left hover:bg-white/5 transition-colors rounded-lg"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                        isSuccess ? 'bg-green-500/20' : 
+                        isError ? 'bg-red-500/20' : 
+                        step.agent_action === 'llm_fix' ? 'bg-purple-500/20' : 'bg-blue-500/20'
+                      }`}>
+                        {getStepIcon(step.agent_action, isActive)}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-semibold text-white">
+                            Step {step.step}
+                          </span>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            step.agent_action === 'lint' 
+                              ? 'bg-blue-500/20 text-blue-300' 
+                              : 'bg-purple-500/20 text-purple-300'
+                          }`}>
+                            {step.agent_action === 'lint' ? '🔍 Lint Check' : '🔧 Auto Fix'}
+                          </span>
+                          {isActive && (
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-300" style={{animation: 'pulse 1s infinite'}}>
+                              ⚡ Active
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-300 mt-1">
+                          {step.message || step.summary.split('\n')[0]}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      {step.timestamp && (
+                        <span className="text-xs text-slate-400">
+                          {new Date(step.timestamp).toLocaleTimeString()}
+                        </span>
+                      )}
+                      {isExpanded ? (
+                        <ChevronDownIcon className="w-5 h-5 text-slate-400" />
+                      ) : (
+                        <ChevronRightIcon className="w-5 h-5 text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+                
+                {isExpanded && (
+                  <div className="px-4 pb-4 space-y-3" style={{animation: 'fadeIn 0.3s ease-out'}}>
+                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-600/30">
+                      <h5 className="text-sm font-medium text-slate-300 mb-2">Summary</h5>
+                      <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto">
+                        {step.summary}
+                      </pre>
+                    </div>
+                    
+                    {step.code && (
+                      <div className="bg-slate-900/70 rounded-lg p-3 border border-slate-600/30">
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="text-sm font-medium text-slate-300">
+                            {step.agent_action === 'lint' ? 'Analyzed Code' : 'Fixed Code'}
+                          </h5>
+                          <button
+                            onClick={() => copyToClipboard(step.code)}
+                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            Copy Code
+                          </button>
+                        </div>
+                        <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-48">
+                          {step.code}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderCodeComparison = () => {
+    if (!result || !showCodeComparison) return null;
+    
+    const { original_code, final_code } = result;
+    
+    return (
+      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4" style={{animation: 'fadeIn 0.5s ease-out'}}>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-white flex items-center space-x-2">
+            <CodeBracketIcon className="w-4 h-4 text-slate-400" />
+            <span>Before & After Comparison</span>
+          </h4>
+          <button
+            onClick={() => copyToClipboard(`ORIGINAL:\n${original_code}\n\nFIXED:\n${final_code}`)}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Copy Both
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+              <h5 className="text-sm font-medium text-red-300">Original Code</h5>
+            </div>
+            <div className="bg-slate-900/70 rounded-lg p-3 border border-red-500/30">
+              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-64">
+                {original_code}
+              </pre>
+            </div>
+          </div>
+          
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+              <h5 className="text-sm font-medium text-green-300">Fixed Code</h5>
+            </div>
+            <div className="bg-slate-900/70 rounded-lg p-3 border border-green-500/30">
+              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-64">
+                {final_code}
+              </pre>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -824,86 +742,43 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
   const renderRawOutput = () => {
     if (!result || !showRawOutput) return null;
-    const rawOutput = formatRawOutput(result.raw_output);
     
     return (
-      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4">
+      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4" style={{animation: 'fadeIn 0.5s ease-out'}}>
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-white flex items-center space-x-2">
             <DocumentTextIcon className="w-4 h-4 text-slate-400" />
-            <span>Raw Output (Debug)</span>
+            <span>Raw Debug Output</span>
           </h4>
           <button
-            onClick={() => copyToClipboard(rawOutput)}
+            onClick={() => copyToClipboard(result.raw_output)}
             className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
           >
             Copy Output
           </button>
         </div>
         
-        <div className="space-y-4">
-          {(!rawOutput || (typeof rawOutput === "string" && rawOutput.trim() === "")) ? (
-            <div className="text-xs text-red-300 bg-slate-900/70 rounded p-3 border border-red-500/30">
-              No raw output available
-            </div>
-          ) : (
-            <>
-              {typeof result.raw_output === "object" && result.raw_output && (
-                <>
-                  {result.raw_output.stdout && (
-                    <div>
-                      <div className="flex items-center space-x-2 mb-2">
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
-                        <h5 className="text-sm font-medium text-emerald-300">Standard Output</h5>
-                      </div>
-                      <div className="text-xs text-slate-300 overflow-auto max-h-48 bg-slate-900/50 p-3 rounded border border-slate-600/30 whitespace-pre-wrap font-mono">
-                        {result.raw_output.stdout}
-                      </div>
-                    </div>
-                  )}
-                  {result.raw_output.stderr && (
-                    <div>
-                      <div className="flex items-center space-x-2 mb-2">
-                        <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
-                        <h5 className="text-sm font-medium text-amber-300">Standard Error</h5>
-                      </div>
-                      <div className="text-xs text-slate-300 overflow-auto max-h-48 bg-slate-900/50 p-3 rounded border border-slate-600/30 whitespace-pre-wrap font-mono">
-                        {result.raw_output.stderr}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-              
-              {typeof rawOutput === "string" && rawOutput.trim() && (
-                <div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                    <h5 className="text-sm font-medium text-blue-300">Raw Output</h5>
-                  </div>
-                  <div className="text-xs text-slate-300 overflow-auto max-h-64 bg-slate-900/50 p-3 rounded border border-slate-600/30 whitespace-pre-wrap font-mono">
-                    {rawOutput}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+        <div className="bg-slate-900/70 rounded-lg p-4 border border-slate-600/30">
+          <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-64">
+            {result.raw_output || 'No raw output available'}
+          </pre>
         </div>
       </div>
     );
   };
 
-  // --- Main Render ---
+  // Main render
   return (
-    <div className="w-full max-w-4xl mx-auto bg-slate-900 rounded-lg p-6 shadow">
+    <div className="w-full max-w-4xl mx-auto bg-slate-900 rounded-lg p-6 shadow-2xl">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg">
             <ShieldCheckIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-white font-bold text-xl">Playbook Validation</h2>
-            <div className="text-xs text-slate-400">Ansible Lint Analysis</div>
+            <h2 className="text-white font-bold text-xl">Enhanced Playbook Validation</h2>
+            <div className="text-xs text-slate-400">Real-time Ansible Lint Analysis & Auto-Fix</div>
           </div>
         </div>
         <div className="flex items-center space-x-3">
@@ -922,11 +797,11 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           className={`flex-1 py-3 rounded-lg font-semibold text-white transition-all duration-300 transform ${
             loading
               ? "bg-gradient-to-r from-slate-600/50 to-slate-500/50 cursor-not-allowed scale-95"
-              : hasValidated
-              ? result?.passed
-                ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:scale-105"
-                : "bg-gradient-to-r from-red-500 to-rose-500 hover:scale-105"
-              : "bg-gradient-to-r from-indigo-500 to-violet-500 hover:scale-105"
+              : result?.passed
+              ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:scale-105 shadow-lg shadow-emerald-500/20"
+              : result && !result.passed
+              ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:scale-105 shadow-lg shadow-amber-500/20"
+              : "bg-gradient-to-r from-indigo-500 to-violet-500 hover:scale-105 shadow-lg shadow-indigo-500/20"
           }`}
           onClick={handleValidation}
           disabled={loading || !playbook || !playbook.trim()}
@@ -934,18 +809,18 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           <div className="flex items-center justify-center space-x-2">
             {loading ? (
               <>
-                <ArrowPathIcon className="w-5 h-5 animate-spin" />
-                <span>Validating Playbook...</span>
+                <ArrowPathIcon className="w-5 h-5" style={{animation: 'spin 1s linear infinite'}} />
+                <span>Validating & Fixing...</span>
               </>
-            ) : hasValidated ? (
+            ) : result ? (
               <>
-                <PlayIcon className="w-4 h-4" />
-                <span>Re-validate Playbook</span>
+                <SparklesIcon className="w-4 h-4" />
+                <span>Re-validate & Fix</span>
               </>
             ) : (
               <>
                 <ShieldCheckIcon className="w-4 h-4" />
-                <span>Validate Playbook</span>
+                <span>Validate & Auto-Fix Playbook</span>
               </>
             )}
           </div>
@@ -972,17 +847,27 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
       {/* Progress Indicator */}
       {progress && (
-        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl" style={{animation: 'fadeIn 0.5s ease-out'}}>
           <div className="flex items-center space-x-2">
-            <ArrowPathIcon className="w-5 h-5 text-blue-400 animate-spin" />
+            <ArrowPathIcon className="w-5 h-5 text-blue-400" style={{animation: 'spin 1s linear infinite'}} />
             <div className="text-blue-300 text-sm">{progress}</div>
+            {streamingActive && (
+              <div className="flex items-center space-x-2 ml-4">
+                <div className="flex space-x-1">
+                  <div className="w-1 h-1 bg-green-400 rounded-full" style={{animation: 'bounce 1.4s ease-in-out infinite'}}></div>
+                  <div className="w-1 h-1 bg-green-400 rounded-full" style={{animation: 'bounce 1.4s ease-in-out infinite', animationDelay: '0.1s'}}></div>
+                  <div className="w-1 h-1 bg-green-400 rounded-full" style={{animation: 'bounce 1.4s ease-in-out infinite', animationDelay: '0.2s'}}></div>
+                </div>
+                <span className="text-xs text-green-400">Streaming</span>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Error Display */}
       {error && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-red-500/10 to-rose-500/10 border border-red-500/30 rounded-xl">
+        <div className="mb-6 p-4 bg-gradient-to-r from-red-500/10 to-rose-500/10 border border-red-500/30 rounded-xl" style={{animation: 'fadeIn 0.5s ease-out'}}>
           <div className="flex items-center space-x-2">
             <ExclamationTriangleIcon className="w-5 h-5 text-red-400" />
             <div>
@@ -1009,40 +894,67 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
             Go to the <strong>Convert</strong> step to generate an Ansible playbook
           </div>
         </div>
-      ) : result && (
+      ) : (
         <div className="space-y-6">
           {renderValidationSummary()}
-          {renderIssues()}
+          {renderStreamingSteps()}
           
           {/* Action Buttons */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {result.raw_output && (
+          {result && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setShowCodeComparison(!showCodeComparison)}
+                  className="text-sm text-green-400 hover:text-green-300 transition-colors flex items-center space-x-2"
+                >
+                  <CodeBracketIcon className="w-4 h-4" />
+                  <span>{showCodeComparison ? 'Hide' : 'Show'} Code Comparison</span>
+                </button>
+                
                 <button
                   onClick={() => setShowRawOutput(!showRawOutput)}
                   className="text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center space-x-2"
                 >
-                  <CodeBracketIcon className="w-4 h-4" />
+                  <DocumentTextIcon className="w-4 h-4" />
                   <span>{showRawOutput ? 'Hide' : 'Show'} Raw Output</span>
-                  {showRawOutput ? (
-                    <ChevronDownIcon className="w-4 h-4" />
-                  ) : (
-                    <ChevronRightIcon className="w-4 h-4" />
-                  )}
                 </button>
-              )}
-              
-              <button
-                onClick={() => copyToClipboard(JSON.stringify(result, null, 2))}
-                className="text-sm text-violet-400 hover:text-violet-300 transition-colors flex items-center space-x-2"
-              >
-                <ClipboardDocumentIcon className="w-4 h-4" />
-                <span>Copy Full Report</span>
-              </button>
+                
+                <button
+                  onClick={() => copyToClipboard(result.final_code)}
+                  className="text-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center space-x-2"
+                >
+                  <ClipboardDocumentIcon className="w-4 h-4" />
+                  <span>Copy Fixed Code</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
           
+          {renderCodeComparison()}
           {renderRawOutput()}
+        </div>
+      )}
+      
+      {/* Real-time status overlay */}
+      {streamingActive && (
+        <div className="fixed top-4 right-4 z-50">
+          <div className="bg-slate-800/90 backdrop-blur-sm border border-green-500/30 rounded-lg p-3 shadow-lg">
+            <div className="flex items-center space-x-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-green-400 rounded-full" style={{animation: 'bounce 1s infinite'}}></div>
+                <div className="w-2 h-2 bg-green-400 rounded-full" style={{animation: 'bounce 1s infinite', animationDelay: '0.1s'}}></div>
+                <div className="w-2 h-2 bg-green-400 rounded-full" style={{animation: 'bounce 1s infinite', animationDelay: '0.2s'}}></div>
+              </div>
+              <div className="text-sm text-green-300 font-medium">
+                Live Validation
+              </div>
+            </div>
+            {currentStep && (
+              <div className="text-xs text-slate-400 mt-1">
+                Step {currentStep.step}: {currentStep.agent_action === 'lint' ? 'Analyzing' : 'Fixing'}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

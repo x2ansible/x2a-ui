@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { 
-  ShieldCheckIcon, 
-  Cog6ToothIcon, 
-  PlayIcon, 
+import React, { useState } from 'react';
+import {
+  ShieldCheckIcon,
+  Cog6ToothIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon,
   XCircleIcon,
-  DocumentTextIcon,
   ClockIcon,
-  FireIcon,
-  BugAntIcon,
-  KeyIcon,
-  SparklesIcon,
+  BoltIcon,
+  BeakerIcon,
+  WrenchScrewdriverIcon,
   ChartBarIcon,
-  ArrowPathIcon
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  SparklesIcon,
+  SignalIcon,
+  CircleStackIcon
 } from "@heroicons/react/24/outline";
 
 interface ValidationSidebarProps {
@@ -24,93 +24,29 @@ interface ValidationSidebarProps {
     bestPractices: boolean;
     customRules: string[];
   };
-  setValidationConfig: (config: unknown) => void;
-  validationResult?: unknown;
-  loading?: boolean;
-  selectedProfile?: string;
-  onProfileChange?: (profile: string) => void;
+  setValidationConfig: (config: any) => void;
+  validationResult?: any;
+  loading: boolean;
+  selectedProfile: string;
+  onProfileChange: (profile: string) => void;
+  // Enhanced props
+  streamingActive?: boolean;
+  currentStep?: any;
+  totalSteps?: number;
 }
 
-export default function ValidationSidebar({ 
-  validationConfig, 
-  setValidationConfig, 
+const ValidationSidebar: React.FC<ValidationSidebarProps> = ({
+  validationConfig,
+  setValidationConfig,
   validationResult,
-  loading = false,
-  selectedProfile = 'production',
-  onProfileChange
-}: ValidationSidebarProps) {
-  const [lintProfiles, setLintProfiles] = useState<any[]>([]);
-  const [validationStats, setValidationStats] = useState({
-    totalRuns: 0,
-    successRate: 0,
-    avgIssues: 0,
-    lastRun: null as Date | null
-  });
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['config', 'profile']));
-
-  // Load validation profiles and stats
-  useEffect(() => {
-    // Updated to use official Ansible Lint profiles
-    const mockProfiles = [
-      { 
-        id: 'minimal', 
-        name: 'Minimal', 
-        description: 'Only critical errors and warnings',
-        rules: 12,
-        color: 'from-blue-500 to-cyan-400'
-      },
-      { 
-        id: 'basic', 
-        name: 'Basic', 
-        description: 'Essential syntax and structure checks',
-        rules: 28,
-        color: 'from-green-500 to-emerald-400'
-      },
-      { 
-        id: 'safety', 
-        name: 'Safety', 
-        description: 'Security and safety focused rules',
-        rules: 35,
-        color: 'from-orange-500 to-red-400'
-      },
-      { 
-        id: 'test', 
-        name: 'Test', 
-        description: 'Rules suitable for testing environments',
-        rules: 42,
-        color: 'from-purple-500 to-pink-400'
-      },
-      { 
-        id: 'production', 
-        name: 'Production', 
-        description: 'Comprehensive validation for production',
-        rules: 58,
-        color: 'from-red-500 to-pink-400'
-      }
-    ];
-    setLintProfiles(mockProfiles);
-
-    // Mock stats - replace with actual API call
-    setValidationStats({
-      totalRuns: 127,
-      successRate: 84.2,
-      avgIssues: 3.7,
-      lastRun: new Date()
-    });
-  }, []);
-
-  const handleConfigChange = (key: string, value: unknown) => {
-    setValidationConfig({
-      ...validationConfig,
-      [key]: value
-    });
-  };
-
-  const handleProfileChange = (profile: string) => {
-    if (onProfileChange) {
-      onProfileChange(profile);
-    }
-  };
+  loading,
+  selectedProfile,
+  onProfileChange,
+  streamingActive = false,
+  currentStep = null,
+  totalSteps = 0,
+}) => {
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['status', 'profile']));
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => {
@@ -120,314 +56,352 @@ export default function ValidationSidebar({
     });
   };
 
-  const getProfileColor = (profileId: string) => {
-    const profile = lintProfiles.find(p => p.id === profileId);
-    return profile?.color || 'from-blue-500 to-cyan-400';
+  const profiles = [
+    {
+      id: 'minimal',
+      name: 'Minimal',
+      description: 'Only critical errors',
+      rules: 12,
+      color: 'emerald',
+      icon: CheckCircleIcon
+    },
+    {
+      id: 'basic',
+      name: 'Basic',
+      description: 'Essential syntax and structure',
+      rules: 28,
+      color: 'blue',
+      icon: BeakerIcon
+    },
+    {
+      id: 'safety',
+      name: 'Safety',
+      description: 'Security and safety focused',
+      rules: 35,
+      color: 'amber',
+      icon: ShieldCheckIcon
+    },
+    {
+      id: 'test',
+      name: 'Test',
+      description: 'Rules suitable for testing',
+      rules: 42,
+      color: 'violet',
+      icon: WrenchScrewdriverIcon
+    },
+    {
+      id: 'production',
+      name: 'Production',
+      description: 'Comprehensive production rules',
+      rules: 67,
+      color: 'red',
+      icon: SparklesIcon
+    }
+  ];
+
+  const getProfileColor = (profileId: string, type: 'bg' | 'text' | 'border' = 'bg') => {
+    const profile = profiles.find(p => p.id === profileId);
+    const colorName = profile?.color || 'blue';
+    
+    const colorMap = {
+      emerald: { bg: 'bg-emerald-500', text: 'text-emerald-400', border: 'border-emerald-500' },
+      blue: { bg: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-500' },
+      amber: { bg: 'bg-amber-500', text: 'text-amber-400', border: 'border-amber-500' },
+      violet: { bg: 'bg-violet-500', text: 'text-violet-400', border: 'border-violet-500' },
+      red: { bg: 'bg-red-500', text: 'text-red-400', border: 'border-red-500' },
+    };
+    
+    return colorMap[colorName as keyof typeof colorMap]?.[type] || colorMap.blue[type];
   };
 
-  const getValidationStatusIcon = () => {
-    if (loading) {
-      return <ArrowPathIcon className="w-5 h-5 text-blue-400 animate-spin" />;
-    }
-    if (!validationResult) {
-      return <ClockIcon className="w-5 h-5 text-slate-400" />;
-    }
-    return validationResult.passed 
-      ? <CheckCircleIcon className="w-5 h-5 text-green-400" />
-      : <XCircleIcon className="w-5 h-5 text-red-400" />;
+  const renderValidationStatus = () => {
+    return (
+      <div className="space-y-4">
+        {/* Real-time Status Card */}
+        <div className={`p-4 rounded-lg border transition-all duration-300 ${
+          streamingActive 
+            ? 'bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30 shadow-lg shadow-green-500/20' 
+            : loading
+            ? 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-blue-500/30'
+            : validationResult?.passed
+            ? 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/30'
+            : validationResult && !validationResult.passed
+            ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30'
+            : 'bg-slate-700/30 border-slate-600/30'
+        }`}>
+          <div className="flex items-center space-x-3 mb-3">
+            {streamingActive ? (
+              <SignalIcon className="w-6 h-6 text-green-400 animate-pulse" />
+            ) : loading ? (
+              <ClockIcon className="w-6 h-6 text-blue-400 animate-spin" />
+            ) : validationResult?.passed ? (
+              <CheckCircleIcon className="w-6 h-6 text-emerald-400" />
+            ) : validationResult && !validationResult.passed ? (
+              <ExclamationTriangleIcon className="w-6 h-6 text-amber-400" />
+            ) : (
+              <CircleStackIcon className="w-6 h-6 text-slate-400" />
+            )}
+            
+            <div className="flex-1">
+              <h3 className="font-semibold text-white">
+                {streamingActive ? 'Live Validation' :
+                 loading ? 'Validating...' :
+                 validationResult?.passed ? 'Validation Passed' :
+                 validationResult ? 'Issues Found & Fixed' :
+                 'Ready to Validate'}
+              </h3>
+              <p className="text-xs text-slate-400">
+                {streamingActive ? 'Real-time analysis active' :
+                 loading ? 'Processing playbook...' :
+                 validationResult ? `${validationResult.total_steps || 0} steps completed` :
+                 'Click validate to start'}
+              </p>
+            </div>
+          </div>
+
+          {/* Real-time Progress */}
+          {(streamingActive || loading) && (
+            <div className="space-y-2">
+              {currentStep && (
+                <div className="flex items-center space-x-2 text-sm">
+                  {currentStep.agent_action === 'lint' ? (
+                    <BeakerIcon className="w-4 h-4 text-blue-400 animate-pulse" />
+                  ) : (
+                    <WrenchScrewdriverIcon className="w-4 h-4 text-purple-400 animate-pulse" />
+                  )}
+                  <span className="text-slate-300">
+                    Step {currentStep.step}: {currentStep.agent_action === 'lint' ? 'Analyzing' : 'Fixing'}
+                  </span>
+                </div>
+              )}
+              
+              {totalSteps > 0 && (
+                <div className="w-full bg-slate-700 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300 progress-bar"
+                    style={{ width: `${Math.min(100, (currentStep?.step || 0) / Math.max(totalSteps, 1) * 100)}%` }}
+                  ></div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Validation Results Summary */}
+          {validationResult && !loading && (
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <div className="text-center p-2 bg-slate-800/50 rounded">
+                <div className="text-lg font-bold text-purple-400">{validationResult.summary?.fixes_applied || 0}</div>
+                <div className="text-xs text-slate-400">Fixes</div>
+              </div>
+              <div className="text-center p-2 bg-slate-800/50 rounded">
+                <div className="text-lg font-bold text-blue-400">{validationResult.summary?.lint_iterations || 0}</div>
+                <div className="text-xs text-slate-400">Checks</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Performance Metrics */}
+        {validationResult && (
+          <div className="p-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
+            <h4 className="text-sm font-medium text-slate-300 mb-2 flex items-center">
+              <ChartBarIcon className="w-4 h-4 mr-1" />
+              Performance
+            </h4>
+            <div className="space-y-1 text-xs">
+              {validationResult.duration_ms && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Duration:</span>
+                  <span className="text-white">{validationResult.duration_ms}ms</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-400">Code Size:</span>
+                <span className="text-white">{validationResult.debug_info?.playbook_length || 0} chars</span>
+              </div>
+              {validationResult.total_steps && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Total Steps:</span>
+                  <span className="text-white">{validationResult.total_steps}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const getValidationSummary = () => {
-    if (!validationResult) return null;
-    
-    const issues = validationResult.issues || [];
-    const errors = issues.filter((i: unknown) => i.severity === 'error' || i.level === 'error').length;
-    const warnings = issues.filter((i: unknown) => i.severity === 'warning' || i.level === 'warning').length;
-    
-    return { errors, warnings, total: issues.length };
+  const renderLintProfile = () => {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium text-white">Lint Profile</h3>
+          <div className={`w-3 h-3 rounded-full ${getProfileColor(selectedProfile)}`}></div>
+        </div>
+        
+        <div className="space-y-2">
+          {profiles.map((profile) => {
+            const Icon = profile.icon;
+            const isSelected = selectedProfile === profile.id;
+            
+            return (
+              <button
+                key={profile.id}
+                onClick={() => onProfileChange(profile.id)}
+                disabled={loading || streamingActive}
+                className={`w-full p-3 rounded-lg border transition-all duration-200 text-left ${
+                  isSelected
+                    ? `${getProfileColor(profile.id, 'bg')}/20 ${getProfileColor(profile.id, 'border')}/50 shadow-lg`
+                    : 'bg-slate-700/30 border-slate-600/30 hover:bg-slate-700/50'
+                } ${(loading || streamingActive) ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}`}
+              >
+                <div className="flex items-center space-x-3">
+                  <Icon className={`w-5 h-5 ${isSelected ? getProfileColor(profile.id, 'text') : 'text-slate-400'}`} />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className={`font-medium ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                        {profile.name}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        isSelected ? `${getProfileColor(profile.id, 'bg')}/30` : 'bg-slate-600/30'
+                      }`}>
+                        {profile.rules} rules
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">{profile.description}</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Profile Info */}
+        <div className="p-3 bg-slate-700/20 rounded-lg border border-slate-600/20">
+          <div className="flex items-center space-x-2 mb-2">
+            <InformationCircleIcon className="w-4 h-4 text-blue-400" />
+            <span className="text-sm font-medium text-slate-300">Profile Info</span>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            {selectedProfile === 'production' && "Most comprehensive ruleset for production environments. Includes all security, performance, and best practice checks."}
+            {selectedProfile === 'test' && "Balanced ruleset suitable for testing environments. Focuses on functionality and reliability."}
+            {selectedProfile === 'safety' && "Security-focused rules to ensure safe deployment practices and vulnerability prevention."}
+            {selectedProfile === 'basic' && "Essential checks for syntax and basic structure validation."}
+            {selectedProfile === 'minimal' && "Only the most critical error detection for rapid development."}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderConfigOptions = () => {
+    return (
+      <div className="space-y-3">
+        <h3 className="font-medium text-white">Validation Options</h3>
+        
+        <div className="space-y-2">
+          {[
+            { key: 'checkSyntax', label: 'Syntax Check', icon: BeakerIcon, color: 'blue' },
+            { key: 'securityScan', label: 'Security Scan', icon: ShieldCheckIcon, color: 'red' },
+            { key: 'performanceCheck', label: 'Performance Check', icon: BoltIcon, color: 'amber' },
+            { key: 'bestPractices', label: 'Best Practices', icon: SparklesIcon, color: 'purple' },
+          ].map(({ key, label, icon: Icon, color }) => (
+            <label
+              key={key}
+              className={`flex items-center space-x-3 p-2 rounded-lg transition-colors ${
+                (loading || streamingActive) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-700/30 cursor-pointer'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={validationConfig[key as keyof typeof validationConfig] as boolean}
+                onChange={(e) => {
+                  if (loading || streamingActive) return;
+                  setValidationConfig({
+                    ...validationConfig,
+                    [key]: e.target.checked,
+                  });
+                }}
+                disabled={loading || streamingActive}
+                className="sr-only"
+              />
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                validationConfig[key as keyof typeof validationConfig]
+                  ? `bg-${color}-500 border-${color}-500`
+                  : 'border-slate-400'
+              }`}>
+                {validationConfig[key as keyof typeof validationConfig] && (
+                  <CheckCircleIcon className="w-3 h-3 text-white" />
+                )}
+              </div>
+              <Icon className={`w-4 h-4 ${
+                validationConfig[key as keyof typeof validationConfig] ? `text-${color}-400` : 'text-slate-400'
+              }`} />
+              <span className="text-sm text-slate-300">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-r border-slate-600/30">
-      <div className="p-6 space-y-6 h-full overflow-y-auto">
-        {/* Header */}
-        <div className="relative">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-400 rounded-xl flex items-center justify-center shadow-lg">
-              <ShieldCheckIcon className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-bold text-white">Playbook Validation</h3>
-              <p className="text-xs text-slate-400">Ansible Lint & Quality</p>
-            </div>
-          </div>
+    <div className="h-full bg-slate-800/50 p-4 space-y-6 overflow-y-auto">
+      {/* Header */}
+      <div className="flex items-center space-x-3">
+        <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-400 rounded-lg flex items-center justify-center">
+          <ShieldCheckIcon className="w-4 h-4 text-white" />
         </div>
-
-        {/* Validation Status */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-slate-200 text-sm flex items-center space-x-2">
-              {getValidationStatusIcon()}
-              <span>Validation Status</span>
-            </h4>
-          </div>
-          
-          {validationResult ? (
-            <div className="space-y-3">
-              <div className={`p-3 rounded-lg border ${
-                validationResult.passed 
-                  ? 'bg-green-500/10 border-green-500/30' 
-                  : 'bg-red-500/10 border-red-500/30'
-              }`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className={`font-medium text-sm ${
-                    validationResult.passed ? 'text-green-300' : 'text-red-300'
-                  }`}>
-                    {validationResult.passed ? 'PASSED' : 'FAILED'}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {validationResult.debug_info?.playbook_length || 0} chars
-                  </span>
-                </div>
-                
-                {(() => {
-                  const summary = getValidationSummary();
-                  return summary && (
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="text-center">
-                        <div className="text-red-400 font-bold">{summary.errors}</div>
-                        <div className="text-slate-500">Errors</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-yellow-400 font-bold">{summary.warnings}</div>
-                        <div className="text-slate-500">Warnings</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-slate-300 font-bold">{summary.total}</div>
-                        <div className="text-slate-500">Total</div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-4">
-              <ClockIcon className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-              <p className="text-sm text-slate-400">No validation run yet</p>
-              <p className="text-xs text-slate-500">Click validate to start</p>
-            </div>
-          )}
+        <div>
+          <h2 className="text-lg font-bold text-white">Validation</h2>
+          <p className="text-xs text-slate-400">Ansible Lint & Quality</p>
         </div>
+      </div>
 
-        {/* Validation Profile */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
-          <button
-            onClick={() => toggleSection('profile')}
-            className="flex items-center justify-between w-full mb-4"
-          >
-            <h4 className="font-semibold text-slate-200 text-sm flex items-center space-x-2">
-              <DocumentTextIcon className="w-4 h-4 text-slate-400" />
-              <span>Lint Profile</span>
-            </h4>
-            <span className="text-slate-400">
-              {expandedSections.has('profile') ? '−' : '+'}
-            </span>
-          </button>
-          
-          {expandedSections.has('profile') && (
-            <div className="space-y-3">
-              {lintProfiles.map((profile) => (
-                <label key={profile.id} className="block cursor-pointer group">
-                  <div className={`p-3 rounded-lg border transition-all ${
-                    selectedProfile === profile.id
-                      ? 'border-blue-400/50 bg-blue-500/10'
-                      : 'border-slate-600/50 hover:border-slate-500/50 bg-slate-700/30'
-                  }`}>
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="radio"
-                        name="profile"
-                        value={profile.id}
-                        checked={selectedProfile === profile.id}
-                        onChange={(e) => handleProfileChange(e.target.value)}
-                        className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-slate-200">
-                            {profile.name}
-                          </span>
-                          <span className="text-xs text-slate-400">
-                            {profile.rules} rules
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {profile.description}
-                        </p>
-                      </div>
-                    </div>
-                    <div className={`h-1 rounded-full bg-gradient-to-r ${profile.color} mt-2 opacity-60`}></div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Validation Status Section */}
+      <div>
+        <button
+          onClick={() => toggleSection('status')}
+          className="flex items-center justify-between w-full text-left mb-3"
+        >
+          <h3 className="font-medium text-slate-300">Validation Status</h3>
+          <Cog6ToothIcon className={`w-4 h-4 text-slate-400 transition-transform ${
+            expandedSections.has('status') ? 'rotate-90' : ''
+          }`} />
+        </button>
+        {expandedSections.has('status') && renderValidationStatus()}
+      </div>
 
-        {/* Validation Configuration */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
-          <button
-            onClick={() => toggleSection('config')}
-            className="flex items-center justify-between w-full mb-4"
-          >
-            <h4 className="font-semibold text-slate-200 text-sm flex items-center space-x-2">
-              <Cog6ToothIcon className="w-4 h-4 text-slate-400" />
-              <span>Validation Options</span>
-            </h4>
-            <span className="text-slate-400">
-              {expandedSections.has('config') ? '−' : '+'}
-            </span>
-          </button>
-          
-          {expandedSections.has('config') && (
-            <div className="space-y-4">
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={validationConfig.checkSyntax}
-                  onChange={(e) => handleConfigChange('checkSyntax', e.target.checked)}
-                  className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 rounded"
-                />
-                <div className="flex items-center space-x-2 flex-1">
-                  <BugAntIcon className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                    Syntax Check
-                  </span>
-                </div>
-              </label>
+      {/* Lint Profile Section */}
+      <div>
+        <button
+          onClick={() => toggleSection('profile')}
+          className="flex items-center justify-between w-full text-left mb-3"
+        >
+          <h3 className="font-medium text-slate-300">Lint Profile</h3>
+          <Cog6ToothIcon className={`w-4 h-4 text-slate-400 transition-transform ${
+            expandedSections.has('profile') ? 'rotate-90' : ''
+          }`} />
+        </button>
+        {expandedSections.has('profile') && renderLintProfile()}
+      </div>
 
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={validationConfig.securityScan}
-                  onChange={(e) => handleConfigChange('securityScan', e.target.checked)}
-                  className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 rounded"
-                />
-                <div className="flex items-center space-x-2 flex-1">
-                  <KeyIcon className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                    Security Scan
-                  </span>
-                </div>
-              </label>
-
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={validationConfig.performanceCheck}
-                  onChange={(e) => handleConfigChange('performanceCheck', e.target.checked)}
-                  className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 rounded"
-                />
-                <div className="flex items-center space-x-2 flex-1">
-                  <FireIcon className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                    Performance Check
-                  </span>
-                </div>
-              </label>
-
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={validationConfig.bestPractices}
-                  onChange={(e) => handleConfigChange('bestPractices', e.target.checked)}
-                  className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 rounded"
-                />
-                <div className="flex items-center space-x-2 flex-1">
-                  <SparklesIcon className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">
-                    Best Practices
-                  </span>
-                </div>
-              </label>
-            </div>
-          )}
-        </div>
-
-        {/* Validation Stats */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
-          <h4 className="font-semibold text-slate-200 text-sm mb-4 flex items-center space-x-2">
-            <ChartBarIcon className="w-4 h-4 text-slate-400" />
-            <span>Validation Stats</span>
-          </h4>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-center">
-              <div className="text-blue-400 text-lg font-bold">{validationStats.totalRuns}</div>
-              <div className="text-xs text-slate-400">Total Runs</div>
-            </div>
-            <div className="text-center">
-              <div className="text-green-400 text-lg font-bold">{validationStats.successRate}%</div>
-              <div className="text-xs text-slate-400">Success Rate</div>
-            </div>
-            <div className="text-center">
-              <div className="text-yellow-400 text-lg font-bold">{validationStats.avgIssues}</div>
-              <div className="text-xs text-slate-400">Avg Issues</div>
-            </div>
-            <div className="text-center">
-              <div className="text-slate-300 text-lg font-bold">
-                {validationStats.lastRun ? validationStats.lastRun.toLocaleDateString() : 'Never'}
-              </div>
-              <div className="text-xs text-slate-400">Last Run</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions - Removed validation button, keeping only reset */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
-          <h4 className="font-semibold text-slate-200 text-sm mb-4">Quick Actions</h4>
-          
-          <div className="space-y-3">
-            <button
-              className="w-full py-2 rounded-lg font-medium text-sm bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 hover:text-white transition-all duration-300 border border-slate-600/50"
-              onClick={() => {
-                // Reset validation result
-                window.location.reload();
-              }}
-            >
-              Reset & Start Over
-            </button>
-          </div>
-        </div>
-
-        {/* Validation Pipeline Indicator */}
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
-          <h4 className="font-semibold text-slate-200 text-sm mb-3">Validation Pipeline</h4>
-          <div className="space-y-2">
-            {[
-              { step: 'Syntax', status: validationConfig.checkSyntax ? 'enabled' : 'disabled', color: validationConfig.checkSyntax ? 'bg-green-400' : 'bg-slate-600' },
-              { step: 'Security', status: validationConfig.securityScan ? 'enabled' : 'disabled', color: validationConfig.securityScan ? 'bg-blue-400' : 'bg-slate-600' },
-              { step: 'Performance', status: validationConfig.performanceCheck ? 'enabled' : 'disabled', color: validationConfig.performanceCheck ? 'bg-yellow-400' : 'bg-slate-600' },
-              { step: 'Best Practices', status: validationConfig.bestPractices ? 'enabled' : 'disabled', color: validationConfig.bestPractices ? 'bg-purple-400' : 'bg-slate-600' },
-            ].map((item, index) => (
-              <div key={index} className="flex items-center space-x-3">
-                <div className={`w-3 h-3 rounded-full ${item.color} ${loading && item.status === 'enabled' ? 'animate-pulse' : ''}`}></div>
-                <span className={`text-xs ${
-                  item.status === 'enabled' ? 'text-slate-300' : 'text-slate-500'
-                }`}>
-                  {item.step}
-                </span>
-                <span className={`text-xs ml-auto ${
-                  item.status === 'enabled' ? 'text-green-400' : 'text-slate-500'
-                }`}>
-                  {item.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Configuration Section */}
+      <div>
+        <button
+          onClick={() => toggleSection('config')}
+          className="flex items-center justify-between w-full text-left mb-3"
+        >
+          <h3 className="font-medium text-slate-300">Configuration</h3>
+          <Cog6ToothIcon className={`w-4 h-4 text-slate-400 transition-transform ${
+            expandedSections.has('config') ? 'rotate-90' : ''
+          }`} />
+        </button>
+        {expandedSections.has('config') && renderConfigOptions()}
       </div>
     </div>
   );
-}
+};
+
+export default ValidationSidebar;
