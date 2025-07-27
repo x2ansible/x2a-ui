@@ -175,7 +175,7 @@ export const useWorkflowState = () => {
   // Get workflow summary
   const getWorkflowSummary = useCallback(() => {
     const completedSteps = Array.from(workflowState.stepResults.entries())
-      .filter(([_, result]) => result.status === 'success')
+      .filter(([, result]) => result.status === 'success')
       .length;
     
     const totalLogs = Array.from(workflowState.stepLogs.values())

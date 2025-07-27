@@ -1,13 +1,13 @@
 import { useState, useCallback } from "react";
 
 export function useContextRetrieval() {
-  const [contextResult, setContextResult] = useState<any>(null);
+  const [contextResult, setContextResult] = useState<unknown>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Provide types for the parameters: code is string, top_k is number
   const retrieveContext = useCallback(
-    async (code: string, top_k: number = 5): Promise<any> => {
+    async (code: string, top_k: number = 5): Promise<unknown> => {
       setLoading(true);
       setError(null);
       try {
@@ -20,7 +20,7 @@ export function useContextRetrieval() {
         setContextResult(result);
         return result;
       } catch (err: unknown) {
-        setError(err.message || "Unknown error");
+        setError((err as Error).message || "Unknown error");
         setContextResult(null);
       } finally {
         setLoading(false);

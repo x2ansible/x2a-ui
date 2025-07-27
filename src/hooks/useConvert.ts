@@ -20,7 +20,7 @@ export function useConvert(BACKEND_URL: string) {
       const data = await resp.json();
       setPlaybook(data.playbook || "");
     } catch (e: unknown) {
-      setError(e.message || "Conversion failed");
+      setError((e as Error).message || "Conversion failed");
     } finally {
       setLoading(false);
     }

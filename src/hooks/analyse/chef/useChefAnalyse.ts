@@ -4,13 +4,13 @@ import { BackendAnalysisResponse } from "@/components/analyse/types/BackendTypes
 interface UseChefAnalyseProps {
   BACKEND_URL: string;
   files: { name: string; content: string }[] | Record<string, string>;
-  setAnalysisResult: (result: BackendAnalysisResponse | null) => void;
+  setAnalysisResult: (result: BackendAnalysisResponse | undefined) => void; // Changed from null
   setLoading: (loading: boolean) => void;
   addLog: (msg: string) => void;
 }
 
 export const useChefAnalyse = ({
-  BACKEND_URL,
+  // BACKEND_URL, // Removed as it's assigned but never used
   files,
   setAnalysisResult,
   setLoading,
@@ -30,7 +30,7 @@ export const useChefAnalyse = ({
 
   const analyseChef = useCallback(
     async (filesArg?: unknown) => {
-      let inputFiles = filesArg ? normalizeFiles(filesArg) : normalizeFiles(files);
+      const inputFiles = filesArg ? normalizeFiles(filesArg) : normalizeFiles(files);
       if (!inputFiles.length) {
         addLog("No files selected for Chef analysis.");
         return;
@@ -77,7 +77,7 @@ export const useChefAnalyse = ({
 
         const decoder = new TextDecoder();
         let buffer = "";
-        let finalResult: any = null;
+        let finalResult: Record<string, unknown> | null = null;
         let hasReceivedData = false;
 
         while (true) {
@@ -92,7 +92,7 @@ export const useChefAnalyse = ({
             if (!trimmed) continue;
             hasReceivedData = true;
 
-            let eventData: any = null;
+            let eventData: Record<string, unknown> | null = null;
             if (trimmed.startsWith("data: ")) {
               try {
                 const jsonStr = trimmed.slice(6).trim();
@@ -100,13 +100,13 @@ export const useChefAnalyse = ({
                   addLog(" Stream completed");
                   continue;
                 }
-                eventData = JSON.parse(jsonStr);
-              } catch (parseError) {
+                eventData = JSON.parse(jsonStr) as Record<string, unknown>;
+              } catch {
                 continue;
               }
             } else if (trimmed.startsWith("{")) {
               try {
-                eventData = JSON.parse(trimmed);
+                eventData = JSON.parse(trimmed) as Record<string, unknown>;
               } catch {
                 continue;
               }
@@ -117,17 +117,17 @@ export const useChefAnalyse = ({
 
             if (eventData) {
               if (eventData.type === "final_analysis" || eventData.type === "result") {
-                finalResult = eventData.data || eventData;
+                finalResult = (eventData.data || eventData) as Record<string, unknown>;
                 addLog(" Analysis complete - processing results...");
               } else if (eventData.type === "progress" || eventData.type === "status") {
                 const message = eventData.message || eventData.status || "Processing...";
-                addLog(`📋 ${message}`);
+                addLog(` ${message}`);
               } else if (eventData.type === "error") {
-                throw new Error(eventData.error || eventData.message || "Backend reported an error");
+                throw new Error(String(eventData.error || eventData.message || "Backend reported an error"));
               } else if (eventData.type === "log") {
                 addLog(`🔍 ${eventData.message || eventData.data}`);
               } else if (!eventData.type && eventData.detailed_analysis) {
-                finalResult = eventData;
+                finalResult = eventData as Record<string, unknown>;
                 addLog(" Analysis complete - processing results...");
               } else {
                 addLog(`📊 ${eventData.message || JSON.stringify(eventData).slice(0, 100)}`);
@@ -146,37 +146,38 @@ export const useChefAnalyse = ({
           success: finalResult.success !== false,
           duration_ms: Date.now() - startTime,
           metadata: {
-            ...finalResult.metadata,
+            ...(finalResult.metadata as Record<string, unknown> || {}),
             analyzed_at: new Date().toISOString(),
             analysis_duration_ms: Date.now() - startTime,
             files_analyzed: inputFiles.map(f => f.name),
             total_code_size: inputFiles.reduce((sum, f) => sum + f.content.length, 0),
-            technology_type: finalResult.metadata?.technology_type || 'chef',
-            agent_name: finalResult.metadata?.agent_name || 'Chef Analysis Agent',
-            agent_icon: finalResult.metadata?.agent_icon || '🍳'
+            technology_type: (finalResult.metadata as Record<string, unknown>)?.technology_type as string || 'chef',
+            agent_name: (finalResult.metadata as Record<string, unknown>)?.agent_name as string || 'Chef Analysis Agent',
+            agent_icon: (finalResult.metadata as Record<string, unknown>)?.agent_icon as string || '🍳'
           }
         };
 
         setAnalysisResult(analysisResult);
 
-        if (finalResult.functionality?.primary_purpose) {
-          addLog(` Purpose: ${finalResult.functionality.primary_purpose}`);
+        const typedResult = finalResult as BackendAnalysisResponse;
+        if (typedResult.functionality?.primary_purpose) {
+          addLog(` Purpose: ${typedResult.functionality.primary_purpose}`);
         }
-        if (finalResult.version_requirements?.migration_effort) {
-          const effort = finalResult.version_requirements.migration_effort;
-          const hours = finalResult.version_requirements.estimated_hours;
+        if (typedResult.version_requirements?.migration_effort) {
+          const effort = typedResult.version_requirements.migration_effort;
+          const hours = typedResult.version_requirements.estimated_hours;
           addLog(` Migration: ${effort} effort${hours ? ` (${hours}h)` : ""}`);
         }
-        if (finalResult.recommendations?.consolidation_action) {
-          addLog(` Recommendation: ${finalResult.recommendations.consolidation_action}`);
+        if (typedResult.recommendations?.consolidation_action) {
+          addLog(` Recommendation: ${typedResult.recommendations.consolidation_action}`);
         }
 
         const duration = Date.now() - startTime;
-        addLog(`🎉 Chef analysis completed in ${duration}ms`);
+        addLog(` Chef analysis completed in ${duration}ms`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         addLog(` Chef analysis failed: ${errorMessage}`);
-        setAnalysisResult(null);
+        setAnalysisResult(undefined);
       } finally {
         setLoading(false);
       }

@@ -1,10 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   SparklesIcon,
-  ClipboardDocumentCheckIcon,
-  ListBulletIcon,
-  ExclamationTriangleIcon,
-  LightBulbIcon
+  InformationCircleIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon
 } from "@heroicons/react/24/outline";
 
 interface GenerateSidebarProps {
@@ -16,166 +15,212 @@ interface GenerateSidebarProps {
     useHandlers: boolean;
     useRoles: boolean;
     useVars: boolean;
-    // You can add more, but only booleans will render checkboxes below
   };
-  setConversionConfig: (config: unknown) => void;
-  contextSummary?: {
+  setConversionConfig: (config: Record<string, unknown>) => void;
+  contextSummary?: string | {
     tokens: number;
     docCount: number;
     topics: string[];
   };
+  code?: string;
+  analysisFiles?: Record<string, string>;
+  context?: string;
+  classificationResult?: unknown;
+  onLogMessage?: (message: string) => void;
+  onComplete?: (playbook: string) => void;
 }
 
 export default function GenerateSidebar({
   conversionConfig,
   setConversionConfig,
   contextSummary,
+  code,
+  analysisFiles = {},
 }: GenerateSidebarProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  
+  // Calculate meaningful stats
+  const hasAnalyzedFiles = Object.keys(analysisFiles).length > 0;
+  const hasCode = code && code.trim().length > 0;
+  const totalFiles = hasAnalyzedFiles ? Object.keys(analysisFiles).length : (hasCode ? 1 : 0);
+  
+  // Handle contextSummary which can be either a string or an object
+  const contextTokens = typeof contextSummary === 'object' ? contextSummary?.tokens || 0 : 0;
+  const contextDocs = typeof contextSummary === 'object' ? contextSummary?.docCount || 0 : 0;
+  const contextTopics = typeof contextSummary === 'object' ? contextSummary?.topics || [] : [];
+  const hasContext = typeof contextSummary === 'string' ? contextSummary.length > 0 : contextTokens > 0;
 
-  const handleChange = (key: string, value: unknown) => {
-    setConversionConfig({ ...conversionConfig, [key]: value });
+  const handleToggleOption = (key: string) => {
+    setConversionConfig({ 
+      ...conversionConfig, 
+      [key]: !conversionConfig[key as keyof typeof conversionConfig] 
+    });
   };
-
-  // PATCH: List keys and labels for booleans ONLY, and render checkboxes safely
-  const booleanCheckboxOptions: { key: keyof typeof conversionConfig; label: string }[] = [
-    { key: "includeComments", label: "Include Comments" },
-    { key: "validateSyntax", label: "Validate YAML Syntax" },
-    { key: "useHandlers", label: "Use Handlers for Reuse" },
-    { key: "useRoles", label: "Use Role-Based Structure" },
-    { key: "useVars", label: "Extract Variables for Reuse" },
-  ];
 
   return (
     <div className="h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-r border-slate-600/30 p-6 space-y-6 overflow-y-auto">
+      
       {/* Header */}
       <div className="flex items-center space-x-3">
         <div className="w-10 h-10 bg-gradient-to-br from-yellow-500 to-orange-400 rounded-xl flex items-center justify-center shadow-lg">
           <SparklesIcon className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h3 className="font-bold text-white">Playbook Conversion</h3>
-          <p className="text-xs text-slate-400">Output Configuration</p>
+          <h3 className="font-bold text-white">Generate Ansible</h3>
+          <p className="text-xs text-slate-400">Configuration & Status</p>
         </div>
       </div>
 
-      {/* Output Options */}
-      <div className="space-y-4">
-        <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Target Format</label>
-          <select
-            value={conversionConfig.targetFormat}
-            onChange={(e) => handleChange("targetFormat", e.target.value)}
-            className="w-full p-2 text-xs rounded-lg border border-slate-600 bg-slate-700 text-slate-100"
-          >
-            <option value="ansible">Ansible</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Output Style</label>
-          <select
-            value={conversionConfig.outputStyle}
-            onChange={(e) => handleChange("outputStyle", e.target.value)}
-            className="w-full p-2 text-xs rounded-lg border border-slate-600 bg-slate-700 text-slate-100"
-          >
-            <option value="minimal">Minimal</option>
-            <option value="detailed">Detailed</option>
-            <option value="enterprise">Enterprise</option>
-          </select>
-        </div>
-
+      {/* Input Status */}
+      <div className="bg-slate-800/40 border border-slate-600/40 rounded-lg p-4">
+        <h4 className="text-slate-200 text-sm font-semibold flex items-center space-x-2 mb-3">
+          <CheckCircleIcon className="w-4 h-4 text-green-400" />
+          <span>Input Status</span>
+        </h4>
+        
         <div className="space-y-3">
-          {booleanCheckboxOptions.map(({ key, label }) => (
-            <label key={key} className="flex items-center space-x-3">
+          {/* Files Status */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400">Files to Convert:</span>
+            <span className="text-xs font-medium text-slate-200">
+              {totalFiles} {totalFiles === 1 ? 'file' : 'files'}
+            </span>
+          </div>
+          
+          {/* Context Status */}
+          {hasContext && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Context Available:</span>
+              <span className="text-xs font-medium text-slate-200">
+                {typeof contextSummary === 'object' 
+                  ? `${contextDocs} docs, ${contextTokens} tokens`
+                  : 'Context loaded'
+                }
+              </span>
+            </div>
+          )}
+          
+          {/* Technology Type */}
+          {hasAnalyzedFiles && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Source Type:</span>
+              <span className="text-xs font-medium text-slate-200">
+                {Object.keys(analysisFiles).some(f => f.includes('chef')) ? 'Chef' :
+                 Object.keys(analysisFiles).some(f => f.includes('puppet')) ? 'Puppet' :
+                 Object.keys(analysisFiles).some(f => f.includes('salt')) ? 'Salt' :
+                 'Configuration'}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Generation Options */}
+      <div className="bg-slate-800/40 border border-slate-600/40 rounded-lg p-4">
+        <h4 className="text-slate-200 text-sm font-semibold flex items-center space-x-2 mb-3">
+          <InformationCircleIcon className="w-4 h-4 text-blue-400" />
+          <span>Generation Options</span>
+        </h4>
+        
+        <div className="space-y-3">
+          {/* Output Style */}
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-2">Output Style</label>
+            <select
+              value={conversionConfig.outputStyle}
+              onChange={(e) => setConversionConfig({ ...conversionConfig, outputStyle: e.target.value })}
+              className="w-full p-2 text-xs rounded-lg border border-slate-600 bg-slate-700 text-slate-100"
+            >
+              <option value="minimal">Minimal - Basic playbook</option>
+              <option value="detailed">Detailed - With comments & structure</option>
+              <option value="enterprise">Enterprise - Production-ready</option>
+            </select>
+          </div>
+
+          {/* Quality Options */}
+          <div className="space-y-2">
+            <label className="flex items-center space-x-3 cursor-pointer">
               <input
                 type="checkbox"
-                checked={!!conversionConfig[key]} // always boolean
-                onChange={(e) => handleChange(key, e.target.checked)}
+                checked={conversionConfig.includeComments}
+                onChange={() => handleToggleOption('includeComments')}
                 className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 rounded"
               />
-              <span className="text-xs text-slate-300">{label}</span>
+              <span className="text-xs text-slate-300">Include helpful comments</span>
             </label>
-          ))}
+            
+            <label className="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={conversionConfig.validateSyntax}
+                onChange={() => handleToggleOption('validateSyntax')}
+                className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 rounded"
+              />
+              <span className="text-xs text-slate-300">Validate YAML syntax</span>
+            </label>
+          </div>
         </div>
       </div>
 
       {/* Context Summary */}
-      {contextSummary && (
+      {hasContext && typeof contextSummary === 'object' && contextTokens > 0 && (
         <div className="bg-slate-800/40 border border-slate-600/40 rounded-lg p-4">
-          <h4 className="text-slate-200 text-sm font-semibold flex items-center space-x-2 mb-2">
-            <ListBulletIcon className="w-4 h-4" />
-            <span>Context Summary</span>
+          <h4 className="text-slate-200 text-sm font-semibold flex items-center space-x-2 mb-3">
+            <InformationCircleIcon className="w-4 h-4 text-purple-400" />
+            <span>Context Information</span>
           </h4>
-          <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
-            <li>
-              <span className="text-slate-200">{contextSummary.docCount}</span> documents matched
-            </li>
-            <li>
-              <span className="text-slate-200">{contextSummary.tokens}</span> tokens retrieved
-            </li>
-            {contextSummary.topics.length > 0 && (
-              <li>
-                Topics:{" "}
-                <span className="text-slate-300">
-                  {contextSummary.topics.slice(0, 3).join(", ")}
-                </span>
-              </li>
+          
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Relevant documents:</span>
+              <span className="text-slate-200 font-medium">{contextDocs}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Context tokens:</span>
+              <span className="text-slate-200 font-medium">{contextTokens}</span>
+            </div>
+            {contextTopics.length > 0 && (
+              <div className="pt-2 border-t border-slate-600/30">
+                <span className="text-slate-400">Key topics:</span>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {contextTopics.slice(0, 4).map((topic, index) => (
+                    <span 
+                      key={index}
+                      className="px-2 py-1 bg-slate-700/50 text-slate-300 rounded text-xs"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
-          </ul>
+          </div>
         </div>
       )}
 
-      {/* Advanced Options Toggle */}
-      <div className="mt-4">
-        <button
-          className="text-xs text-blue-300 hover:underline"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-        >
-          {showAdvanced ? "Hide" : "Show"} Advanced Options
-        </button>
-        {showAdvanced && (
-          <div className="mt-3 text-xs text-slate-400 space-y-2">
-            <p className="italic">Prompt tweaks, debug flags, and model/tool selection coming soon.</p>
-          </div>
-        )}
-      </div>
-
       {/* Help Section */}
       <div className="border-t border-slate-600/30 pt-4">
-        <div className="flex items-center space-x-2 text-xs text-slate-400">
-          <LightBulbIcon className="w-4 h-4" />
-          <span>Need help? </span>
+        <div className="flex items-center space-x-2 text-xs text-slate-400 mb-2">
+          <ExclamationTriangleIcon className="w-4 h-4" />
+          <span>Need help?</span>
         </div>
-        <ul className="mt-2 space-y-1 text-xs text-blue-300 underline">
-          <li>
-            <a
-              href="https://docs.ansible.com/ansible/latest/user_guide/playbooks_best_practices.html"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Ansible Best Practices
-            </a>
-          </li>
-          <li>
-            <a
-              href="https://docs.ansible.com/ansible/latest/playbook_guide/index.html"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Playbook Guide
-            </a>
-          </li>
-          <li>
-            <a
-              href="https://ansible-lint.readthedocs.io/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Ansible Linting
-            </a>
-          </li>
-        </ul>
+        <div className="space-y-1 text-xs">
+          <a
+            href="https://docs.ansible.com/ansible/latest/playbook_guide/index.html"
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-300 hover:text-blue-200 underline block"
+          >
+            Ansible Playbook Guide
+          </a>
+          <a
+            href="https://docs.ansible.com/ansible/latest/user_guide/playbooks_best_practices.html"
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-300 hover:text-blue-200 underline block"
+          >
+            Best Practices
+          </a>
+        </div>
       </div>
     </div>
   );

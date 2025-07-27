@@ -1,32 +1,78 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: agentic-ui
+  name: x2a-ui
+  labels:
+    app: x2a-ui
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: agentic-ui
+      app: x2a-ui
   template:
     metadata:
       labels:
-        app: agentic-ui
+        app: x2a-ui
     spec:
       containers:
-        - name: ui
-          image: quay.io/rbrhssa/x2ansible:latest
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8080
-          volumeMounts:
-            - name: config
-              mountPath: /app/config.yaml
-              subPath: config.yaml
-            - name: tmp-volume
-              mountPath: /tmp
-      volumes:
-        - name: config
-          configMap:
-            name: agentic-config
-        - name: tmp-volume
-          emptyDir: {}
+      - name: ui
+        image: quay.io/rbrhssa/x2a-ui:1.0.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NEXTAUTH_SECRET
+          value: "your-generated-secret-here"
+        - name: NEXTAUTH_URL
+          value: "https://x2a-ui-x2a.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com"
+        - name: GITHUB_CLIENT_ID
+          value: "Ov23li9suv3cJIMn4GKa"
+        - name: GITHUB_CLIENT_SECRET
+          value: "bd16c60466cca4d3a4058ef7c67adbea3f254fb1"
+        - name: NEXT_PUBLIC_BACKEND_URL
+          value: "https://x2a-api-x2a.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com"
+        - name: BACKEND_URL
+          value: "https://x2a-api-x2a.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com"
+        - name: NEXT_PUBLIC_LLAMASTACK_URL
+          value: "https://lss-ai-agent.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com"
+        - name: LLAMASTACK_API_URL
+          value: "https://lss-ai-agent.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com"
+        - name: ALLOWED_GITHUB_USERS
+          value: "rrbanda"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x2a-ui-service
+  labels:
+    app: x2a-ui
+spec:
+  selector:
+    app: x2a-ui
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: x2a-ui-route
+  labels:
+    app: x2a-ui
+spec:
+  host: x2a-ui-x2a.apps.cluster-p4mxv.p4mxv.sandbox338.opentlc.com
+  to:
+    kind: Service
+    name: x2a-ui-service
+  port:
+    targetPort: 80
+  tls:
+    termination: edge

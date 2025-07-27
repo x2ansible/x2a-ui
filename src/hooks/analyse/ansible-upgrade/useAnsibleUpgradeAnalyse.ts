@@ -5,13 +5,13 @@ import { BackendAnalysisResponse } from "@/components/analyse/types/BackendTypes
 interface UseAnsibleUpgradeAnalyseProps {
   BACKEND_URL: string;
   files: { name: string; content: string }[] | Record<string, string>;
-  setAnalysisResult: (result: BackendAnalysisResponse | null) => void;
+  setAnalysisResult: (result: BackendAnalysisResponse | undefined) => void; // Changed from null
   setLoading: (loading: boolean) => void;
   addLog: (msg: string) => void;
 }
 
 export const useAnsibleUpgradeAnalyse = ({
-  BACKEND_URL,
+  // BACKEND_URL, // Removed as it's assigned but never used
   files,
   setAnalysisResult,
   setLoading,
@@ -98,7 +98,7 @@ export const useAnsibleUpgradeAnalyse = ({
 
         const decoder = new TextDecoder();
         let buffer = "";
-        let finalResult: any = null;
+        let finalResult: Record<string, unknown> | null = null;
         let hasReceivedData = false;
 
         while (true) {
@@ -115,7 +115,7 @@ export const useAnsibleUpgradeAnalyse = ({
 
             hasReceivedData = true;
 
-            let eventData: any = null;
+            let eventData: Record<string, unknown> | null = null;
 
             if (trimmed.startsWith("data: ")) {
               try {
@@ -143,19 +143,19 @@ export const useAnsibleUpgradeAnalyse = ({
 
             if (eventData) {
               if (eventData.type === "final_result" && eventData.data) {
-                finalResult = eventData.data;
+                finalResult = eventData.data as Record<string, unknown>;
                 addLog(" Analysis complete - processing results...");
               } else if (eventData.type === "final_analysis" || eventData.type === "result") {
-                finalResult = eventData.data || eventData;
+                finalResult = (eventData.data || eventData) as Record<string, unknown>;
                 addLog(" Analysis complete - processing results...");
               } else if (eventData.type === "progress" || eventData.type === "status") {
                 const message = eventData.message || eventData.status || "Processing...";
-                addLog(`📋 ${message}`);
+                addLog(` ${message}`);
               } else if (eventData.type === "start") {
                 const message = eventData.message || "Starting analysis...";
                 addLog(`🚀 ${message}`);
               } else if (eventData.type === "error") {
-                throw new Error(eventData.error || eventData.message || "Backend reported an error");
+                throw new Error(String(eventData.error || eventData.message || "Backend reported an error"));
               } else if (eventData.type === "log") {
                 addLog(`🔍 ${eventData.message || eventData.data}`);
               } else if (!eventData.type && eventData.detailed_analysis) {
@@ -180,46 +180,46 @@ export const useAnsibleUpgradeAnalyse = ({
         addLog("🔄 Ansible upgrade analysis completed successfully");
 
         const analysisResult: BackendAnalysisResponse = {
-          ...finalResult,
-          success: finalResult.success !== false,
+          ...(finalResult as any),
+          success: (finalResult as any).success !== false,
           duration_ms: Date.now() - startTime,
           metadata: {
-            ...finalResult.metadata,
+            ...(finalResult as any).metadata,
             analyzed_at: new Date().toISOString(),
             analysis_duration_ms: Date.now() - startTime,
             files_analyzed: inputFiles.map(f => f.name),
             total_code_size: inputFiles.reduce((sum, f) => sum + f.content.length, 0),
-            technology_type: finalResult.metadata?.technology_type || 'ansible-upgrade',
-            agent_name: finalResult.metadata?.agent_name || 'Ansible Upgrade Analysis Agent',
-            agent_icon: finalResult.metadata?.agent_icon || '🔄'
+            technology_type: (finalResult as any).metadata?.technology_type || 'ansible-upgrade',
+            agent_name: (finalResult as any).metadata?.agent_name || 'Ansible Upgrade Analysis Agent',
+            agent_icon: (finalResult as any).metadata?.agent_icon || '🔄'
           }
         };
 
         setAnalysisResult(analysisResult);
 
         // Log specific upgrade findings
-        if (finalResult.upgrade_analysis?.current_version) {
-          addLog(`📋 Current Version: ${finalResult.upgrade_analysis.current_version}`);
+        if ((finalResult as any).upgrade_analysis?.current_version) {
+          addLog(` Current Version: ${(finalResult as any).upgrade_analysis.current_version}`);
         }
-        if (finalResult.upgrade_analysis?.recommended_version) {
-          addLog(`🎯 Recommended Version: ${finalResult.upgrade_analysis.recommended_version}`);
+        if ((finalResult as any).upgrade_analysis?.recommended_version) {
+          addLog(`🎯 Recommended Version: ${(finalResult as any).upgrade_analysis.recommended_version}`);
         }
-        if (finalResult.upgrade_analysis?.breaking_changes) {
-          const breakingCount = finalResult.upgrade_analysis.breaking_changes.length;
+        if ((finalResult as any).upgrade_analysis?.breaking_changes) {
+          const breakingCount = (finalResult as any).upgrade_analysis.breaking_changes.length;
           addLog(`⚠️  Breaking Changes: ${breakingCount} found`);
         }
-        if (finalResult.recommendations?.upgrade_priority) {
-          addLog(`🔥 Priority: ${finalResult.recommendations.upgrade_priority}`);
+        if ((finalResult as any).recommendations?.upgrade_priority) {
+          addLog(`🔥 Priority: ${(finalResult as any).recommendations.upgrade_priority}`);
         }
 
         const duration = Date.now() - startTime;
-        addLog(`🎉 Ansible upgrade analysis completed in ${duration}ms`);
+        addLog(` Ansible upgrade analysis completed in ${duration}ms`);
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("Ansible upgrade analysis error:", error);
         addLog(`❌ Ansible upgrade analysis failed: ${errorMessage}`);
-        setAnalysisResult(null);
+        setAnalysisResult(undefined);
       } finally {
         setLoading(false);
       }

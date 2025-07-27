@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Rocket, Sparkles, Wrench, Server } from "lucide-react";
+import { Rocket, Sparkles, Wrench } from "lucide-react";
 
 // ---- Workflows definition ----
 const workflows = [
@@ -58,7 +58,7 @@ const workflows = [
 ];
 
 export default function Page() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [pendingWorkflow, setPendingWorkflow] = useState<string | null>(null);
   const [comingSoonWorkflow, setComingSoonWorkflow] = useState<string | null>(null);

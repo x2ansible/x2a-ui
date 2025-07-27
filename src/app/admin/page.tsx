@@ -44,7 +44,7 @@ function AdminPageContent() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="bg-slate-800 p-8 rounded-lg shadow-xl border border-slate-700 text-center">
           <p className="mb-4 text-red-400 font-semibold">🚫 Access Denied</p>
-          <p className="text-sm text-slate-400 mb-4">You don't have permission to access the admin panel</p>
+          <p className="text-sm text-slate-400 mb-4">You don&apos;t have permission to access the admin panel</p>
           <button
             onClick={navigateBackToApp}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"

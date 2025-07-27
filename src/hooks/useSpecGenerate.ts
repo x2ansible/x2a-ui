@@ -66,8 +66,8 @@ export function useSpecGenerate() {
       return data;
       
     } catch (err: unknown) {
-      const errorMsg = err?.message 
-        ? `Failed to generate spec: ${err.message}`
+      const errorMsg = (err as Error)?.message 
+        ? `Failed to generate spec: ${(err as Error).message}`
         : "Unknown error while generating spec";
       
       console.error(' Spec generation failed:', err);

@@ -1,5 +1,5 @@
 declare module 'react-syntax-highlighter' {
-  import * as React from 'react';
+  // import * as React from 'react'; // Removed as it's assigned but never used
   export const Prism: unknown;
   export const Light: unknown;
   export const SyntaxHighlighter: unknown;

@@ -7,19 +7,43 @@ import {
   ClipboardDocumentIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  BugAntIcon,
   Cog6ToothIcon,
-  EyeIcon,
   CodeBracketIcon,
   PlayIcon,
   ArrowPathIcon
 } from "@heroicons/react/24/outline";
 
+interface ValidationIssue {
+  severity?: string;
+  level?: string;
+  message?: string;
+  description?: string;
+  rule?: string;
+  line?: number;
+  filename?: string;
+}
+
+interface ValidationResult {
+  passed: boolean;
+  summary?: string;
+  issues?: ValidationIssue[];
+  raw_output?: unknown;
+  error_message?: string;
+  debug_info?: {
+    status?: string;
+    error?: string;
+    playbook_length?: number;
+    [key: string]: unknown;
+  };
+  raw_stdout?: string;
+  raw_stderr?: string;
+}
+
 const LintInspector = () => {
-  const [validationResult, setValidationResult] = useState(null);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState(null);
-  const [progress, setProgress] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('summary');
   const [expandedSections, setExpandedSections] = useState(new Set());
   const [testPlaybook, setTestPlaybook] = useState(`---
@@ -179,17 +203,18 @@ const LintInspector = () => {
 
     } catch (err) {
       console.error("Validation error:", err);
-      setError(err.message || "Validation failed");
+      const errorMessage = err instanceof Error ? err.message : "Validation failed";
+      setError(errorMessage);
       
       setValidationResult({
         passed: false,
         summary: "Validation Error",
         issues: [],
-        raw_output: err.message || "Unknown error",
-        error_message: err.message,
+        raw_output: errorMessage,
+        error_message: errorMessage,
         debug_info: {
           status: "error",
-          error: err.message
+          error: errorMessage
         }
       });
     } finally {
@@ -198,7 +223,7 @@ const LintInspector = () => {
     }
   }, [testPlaybook, validationResult]);
 
-  const copyToClipboard = async (text) => {
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
     } catch (err) {
@@ -206,24 +231,29 @@ const LintInspector = () => {
     }
   };
 
-  const toggleSection = (section) => {
+  const toggleSection = (section: string) => {
     setExpandedSections(prev => {
       const copy = new Set(prev);
-      copy.has(section) ? copy.delete(section) : copy.add(section);
+      if (copy.has(section)) {
+        copy.delete(section);
+      } else {
+        copy.add(section);
+      }
       return copy;
     });
   };
 
-  const formatRawOutput = (rawOutput) => {
+  const formatRawOutput = (rawOutput: unknown) => {
     if (typeof rawOutput === 'string') {
       return rawOutput;
     }
     if (typeof rawOutput === 'object' && rawOutput) {
-      if (rawOutput.stdout && rawOutput.stderr) {
-        return `STDOUT:\n${rawOutput.stdout}\n\nSTDERR:\n${rawOutput.stderr}`;
+      const output = rawOutput as Record<string, unknown>;
+      if (output.stdout && output.stderr) {
+        return `STDOUT:\n${output.stdout}\n\nSTDERR:\n${output.stderr}`;
       }
-      if (rawOutput.stdout) return rawOutput.stdout;
-      if (rawOutput.stderr) return rawOutput.stderr;
+      if (output.stdout) return output.stdout as string;
+      if (output.stderr) return output.stderr as string;
       return JSON.stringify(rawOutput, null, 2);
     }
     return 'No raw output available';
@@ -318,7 +348,7 @@ const LintInspector = () => {
       );
     }
 
-    const renderIssueCategory = (title, issues, bgColor, textColor) => {
+    const renderIssueCategory = (title: string, issues: ValidationIssue[], bgColor: string, textColor: string) => {
       if (issues.length === 0) return null;
 
       return (

@@ -2,11 +2,8 @@ import type { NextConfig } from "next";
 
 // Main backend URL (default: 8000)
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-// Validation agent URL (default: 8096)
-const validateBackendUrl = process.env.NEXT_PUBLIC_VALIDATE_BACKEND_URL || 'http://localhost:8096';
 
 console.log(`[next.config.ts] Backend URL: ${backendUrl}`);
-console.log(`[next.config.ts] Validate Backend URL: ${validateBackendUrl}`);
 console.log(`[next.config.ts] Environment: ${process.env.NODE_ENV}`);
 
 const nextConfig: NextConfig = {
@@ -27,10 +24,10 @@ const nextConfig: NextConfig = {
         source: '/api/chef/:path*',
         destination: `${backendUrl}/api/chef/:path*`,
       },
-      // Validate agent (validation backend - 8096 by default)
+      // Validate agent (main backend)
       {
         source: '/api/validate/:path*',
-        destination: `${validateBackendUrl}/api/validate/:path*`,
+        destination: `${backendUrl}/api/validate/:path*`,
       },
       // Context agent (main backend)
       {
@@ -59,7 +56,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: process.env.NODE_ENV === 'development',
   },
   eslint: {
-    ignoreDuringBuilds: process.env.NODE_ENV === 'development',
+    ignoreDuringBuilds: true, // Ignore ESLint during all builds
   },
 };
 

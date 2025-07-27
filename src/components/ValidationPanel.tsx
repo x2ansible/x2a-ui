@@ -3,13 +3,9 @@ import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  XCircleIcon,
   ClipboardDocumentIcon,
-  PlayIcon,
   DocumentTextIcon,
   Cog6ToothIcon,
-  EyeIcon,
-  EyeSlashIcon,
   CodeBracketIcon,
   InformationCircleIcon,
   ArrowPathIcon,
@@ -65,7 +61,7 @@ interface StreamingValidationResult {
 
 const ValidationPanel: React.FC<ValidationPanelProps> = ({
   playbook = "",
-  validationConfig,
+  // validationConfig, // Removed as it's assigned but never used
   onLogMessage,
   onValidationComplete,
   selectedProfile = 'production'
@@ -73,7 +69,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   // Enhanced state for streaming validation
   const [result, setResult] = useState<StreamingValidationResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [hasValidated, setHasValidated] = useState(false);
+  const [, setHasValidated] = useState(false); // Removed hasValidated as it's assigned but never used
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [streamingActive, setStreamingActive] = useState(false);
@@ -109,7 +105,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   useEffect(() => {
     if (result && onValidationComplete) {
       onValidationComplete(result);
-      logMessage(`✅ Validation completed: ${result.passed ? 'PASSED' : 'COMPLETED'} with ${result.summary.fixes_applied} fixes`);
+      logMessage(` Validation completed: ${result.passed ? 'PASSED' : 'COMPLETED'} with ${result.summary.fixes_applied} fixes`);
     }
   }, [result, onValidationComplete, logMessage]);
 
@@ -208,7 +204,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let collectedSteps: ValidationStep[] = [];
+      const collectedSteps: ValidationStep[] = [];
       let finalResult = null;
       let streamComplete = false;
 
@@ -311,7 +307,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
         setLoading(false);
         setStreamingActive(false);
         setProgress(null);
-        logMessage("✅ Validation completed successfully");
+        logMessage(" Validation completed successfully");
       } else if (collectedSteps.length > 0) {
         // Create result from collected steps
         const lastStep = collectedSteps[collectedSteps.length - 1];
@@ -333,12 +329,12 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     } catch (err: unknown) {
       clearTimeout(timeoutId);
       
-      if (err.name === 'AbortError') {
+      if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') {
         logMessage("🚫 Validation cancelled");
         return;
       }
       
-      const errorMessage = err.message || "Validation failed";
+      const errorMessage = err instanceof Error ? err.message : "Validation failed";
       logMessage(`❌ Validation error: ${errorMessage}`);
       setError(errorMessage);
       setLoading(false);
@@ -349,16 +345,17 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   }, [playbook, selectedProfile, logMessage]);
 
   // Helper function to transform backend response to enhanced result
-  const transformToStreamingResult = (data: any, originalCode: string, streamSteps: ValidationStep[]): StreamingValidationResult => {
-    const steps = data.steps || streamSteps || [];
-    const finalCode = data.final_code || originalCode;
+  const transformToStreamingResult = (data: unknown, originalCode: string, streamSteps: ValidationStep[]): StreamingValidationResult => {
+    const dataObj = data as Record<string, unknown>;
+    const steps = (dataObj.steps as ValidationStep[]) || streamSteps || [];
+    const finalCode = (dataObj.final_code as string) || originalCode;
     const duration = startTimeRef.current ? Date.now() - startTimeRef.current : undefined;
     
     const lintSteps = steps.filter((s: ValidationStep) => s.agent_action === 'lint');
     const fixSteps = steps.filter((s: ValidationStep) => s.agent_action === 'llm_fix');
     
     return {
-      passed: data.passed || false,
+      passed: (dataObj.passed as boolean) || false,
       final_code: finalCode,
       original_code: originalCode,
       steps: steps,
@@ -367,19 +364,19 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       summary: {
         fixes_applied: fixSteps.length,
         lint_iterations: lintSteps.length,
-        final_status: data.passed ? 'passed' : 'failed',
+        final_status: (dataObj.passed as boolean) ? 'passed' : 'failed',
       },
       // Legacy compatibility
       issues: steps.filter((s: ValidationStep) => s.agent_action === 'lint' && s.summary.includes('Failed')),
       raw_output: steps.map((s: ValidationStep) => `Step ${s.step} (${s.agent_action}): ${s.summary}`).join('\n\n'),
       debug_info: {
-        status: data.passed ? "passed" : "failed",
+        status: (dataObj.passed as boolean) ? "passed" : "failed",
         playbook_length: originalCode.length,
         steps_completed: steps.length,
         lint_iterations: lintSteps.length,
         fixes_applied: fixSteps.length,
       },
-      error_message: data.passed ? undefined : "Validation completed with fixes applied",
+      error_message: (dataObj.passed as boolean) ? undefined : "Validation completed with fixes applied",
     };
   };
 
@@ -418,7 +415,11 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   const toggleStepExpansion = (uniqueKey: string) => {
     setExpandedSteps(prev => {
       const copy = new Set(prev);
-      copy.has(uniqueKey) ? copy.delete(uniqueKey) : copy.add(uniqueKey);
+      if (copy.has(uniqueKey)) {
+        copy.delete(uniqueKey);
+      } else {
+        copy.add(uniqueKey);
+      }
       return copy;
     });
   };
@@ -426,7 +427,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      logMessage("📋 Copied to clipboard");
+      logMessage(" Copied to clipboard");
     } catch {
       logMessage("❌ Failed to copy to clipboard");
     }
@@ -489,15 +490,15 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     
     return (
       <div
-        className={`rounded-xl border p-6 transition-all duration-500 ${
+        className={`rounded-xl border p-6 transition-all duration-500 backdrop-blur-sm ${
           passed
-            ? "bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/20"
-            : "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30 shadow-lg shadow-amber-500/20"
+            ? "bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/30 shadow-lg shadow-emerald-500/10"
+            : "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30 shadow-lg shadow-amber-500/10"
         }`}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-xl transition-all duration-300 ${passed ? 'bg-emerald-500/20' : 'bg-amber-500/20'}`}>
+            <div className={`p-2 rounded-xl transition-all duration-300 backdrop-blur-sm ${passed ? 'bg-emerald-500/20' : 'bg-amber-500/20'}`}>
               {passed ? (
                 <CheckCircleIcon className="w-8 h-8 text-emerald-400" style={{animation: 'bounce 1s ease-in-out'}} />
               ) : (
@@ -509,8 +510,8 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
                 {passed ? "✨ Validation Passed!" : "🔧 Issues Fixed Successfully!"}
               </h3>
               <div className="text-sm text-slate-400">
-                Profile: <span className="font-medium text-white">{getProfileDisplayName(selectedProfile)}</span> • 
-                Steps: <span className="font-medium text-white">{total_steps}</span> • 
+                Profile: <span className="font-medium text-slate-200">{getProfileDisplayName(selectedProfile)}</span> • 
+                Steps: <span className="font-medium text-slate-200">{total_steps}</span> • 
                 Fixes: <span className="font-medium text-purple-300">{summary.fixes_applied}</span>
                 {duration_ms && <span> • Duration: <span className="font-medium text-blue-300">{duration_ms}ms</span></span>}
               </div>
@@ -518,7 +519,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           </div>
           <button
             onClick={() => copyToClipboard(JSON.stringify(result, null, 2))}
-            className="text-slate-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-700/50"
+            className="text-slate-400 hover:text-slate-200 transition-colors p-2 rounded-lg hover:bg-slate-700/30 backdrop-blur-sm"
             title="Copy full validation result"
           >
             <ClipboardDocumentIcon className="w-5 h-5" />
@@ -526,19 +527,19 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
         </div>
         
         <div className="grid grid-cols-4 gap-4">
-          <div className="text-center p-4 rounded-lg bg-slate-700/30 border border-slate-600/30 transition-all duration-300 hover:bg-slate-700/50">
-            <div className="text-slate-300 text-2xl font-bold">{total_steps}</div>
+          <div className="text-center p-4 rounded-lg bg-slate-800/30 border border-slate-600/20 transition-all duration-300 hover:bg-slate-700/30 backdrop-blur-sm">
+            <div className="text-slate-200 text-2xl font-bold">{total_steps}</div>
             <div className="text-xs text-slate-400">Total Steps</div>
           </div>
-          <div className="text-center p-4 rounded-lg bg-purple-500/10 border border-purple-500/20 transition-all duration-300 hover:bg-purple-500/20">
+          <div className="text-center p-4 rounded-lg bg-purple-500/10 border border-purple-500/20 transition-all duration-300 hover:bg-purple-500/20 backdrop-blur-sm">
             <div className="text-purple-400 text-2xl font-bold">{summary.fixes_applied}</div>
             <div className="text-xs text-slate-400">Fixes Applied</div>
           </div>
-          <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 transition-all duration-300 hover:bg-blue-500/20">
+          <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 transition-all duration-300 hover:bg-blue-500/20 backdrop-blur-sm">
             <div className="text-blue-400 text-2xl font-bold">{summary.lint_iterations}</div>
             <div className="text-xs text-slate-400">Lint Checks</div>
           </div>
-          <div className="text-center p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 transition-all duration-300 hover:bg-emerald-500/20">
+          <div className="text-center p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 transition-all duration-300 hover:bg-emerald-500/20 backdrop-blur-sm">
             <div className={`text-2xl font-bold ${passed ? 'text-emerald-400' : 'text-amber-400'}`}>
               {passed ? '✓' : '🔧'}
             </div>
@@ -555,7 +556,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h4 className="font-semibold text-white flex items-center space-x-2">
+          <h4 className="font-semibold text-slate-200 flex items-center space-x-2">
             <BoltIcon className="w-5 h-5 text-yellow-400" />
             <span>Validation Steps ({steps.length})</span>
             {streamingActive && (
@@ -581,7 +582,8 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           </div>
         </div>
         
-        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+        {/* OLED-friendly scrollbar styling */}
+        <div className="space-y-3 max-h-96 overflow-y-auto pr-2 validation-scrollbar">
           {steps.map((step, index) => {
             // Create unique key using both index and step data to avoid duplicates
             const uniqueKey = `${step.step}-${step.agent_action}-${index}`;
@@ -594,20 +596,20 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
             return (
               <div 
                 key={uniqueKey}
-                className={`rounded-lg border transition-all duration-500 ${
+                className={`rounded-lg border transition-all duration-500 backdrop-blur-sm ${
                   isActive 
-                    ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/50 shadow-lg shadow-yellow-500/20' 
+                    ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-500/50 shadow-lg shadow-yellow-500/10' 
                     : `bg-gradient-to-r ${getStepStatusColor(step.agent_action, step.summary)}`
                 } ${isActive ? 'transform scale-105' : ''}`}
                 style={isActive ? {animation: 'pulse 2s infinite'} : {}}
               >
                 <button
                   onClick={() => toggleStepExpansion(uniqueKey)}
-                  className="w-full p-4 text-left hover:bg-white/5 transition-colors rounded-lg"
+                  className="w-full p-4 text-left hover:bg-slate-700/20 transition-colors rounded-lg"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                      <div className={`flex items-center justify-center w-8 h-8 rounded-full backdrop-blur-sm ${
                         isSuccess ? 'bg-green-500/20' : 
                         isError ? 'bg-red-500/20' : 
                         step.agent_action === 'llm_fix' ? 'bg-purple-500/20' : 'bg-blue-500/20'
@@ -617,10 +619,10 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
                       
                       <div className="flex-1">
                         <div className="flex items-center space-x-2">
-                          <span className="font-semibold text-white">
+                          <span className="font-semibold text-slate-200">
                             Step {step.step}
                           </span>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          <span className={`px-2 py-1 rounded text-xs font-medium backdrop-blur-sm ${
                             step.agent_action === 'lint' 
                               ? 'bg-blue-500/20 text-blue-300' 
                               : 'bg-purple-500/20 text-purple-300'
@@ -628,7 +630,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
                             {step.agent_action === 'lint' ? '🔍 Lint Check' : '🔧 Auto Fix'}
                           </span>
                           {isActive && (
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-300" style={{animation: 'pulse 1s infinite'}}>
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-300 backdrop-blur-sm" style={{animation: 'pulse 1s infinite'}}>
                               ⚡ Active
                             </span>
                           )}
@@ -656,7 +658,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
                 
                 {isExpanded && (
                   <div className="px-4 pb-4 space-y-3" style={{animation: 'fadeIn 0.3s ease-out'}}>
-                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-600/30">
+                    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-600/30 backdrop-blur-sm">
                       <h5 className="text-sm font-medium text-slate-300 mb-2">Summary</h5>
                       <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto">
                         {step.summary}
@@ -664,7 +666,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
                     </div>
                     
                     {step.code && (
-                      <div className="bg-slate-900/70 rounded-lg p-3 border border-slate-600/30">
+                      <div className="bg-slate-900/70 rounded-lg p-3 border border-slate-600/30 backdrop-blur-sm">
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="text-sm font-medium text-slate-300">
                             {step.agent_action === 'lint' ? 'Analyzed Code' : 'Fixed Code'}
@@ -697,9 +699,9 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     const { original_code, final_code } = result;
     
     return (
-      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4" style={{animation: 'fadeIn 0.5s ease-out'}}>
+      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4 backdrop-blur-sm" style={{animation: 'fadeIn 0.5s ease-out'}}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-white flex items-center space-x-2">
+          <h4 className="font-semibold text-slate-200 flex items-center space-x-2">
             <CodeBracketIcon className="w-4 h-4 text-slate-400" />
             <span>Before & After Comparison</span>
           </h4>
@@ -717,8 +719,8 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
               <div className="w-3 h-3 bg-red-400 rounded-full"></div>
               <h5 className="text-sm font-medium text-red-300">Original Code</h5>
             </div>
-            <div className="bg-slate-900/70 rounded-lg p-3 border border-red-500/30">
-              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-64">
+            <div className="bg-slate-900/70 rounded-lg p-3 border border-red-500/30 backdrop-blur-sm">
+              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-64 validation-scrollbar">
                 {original_code}
               </pre>
             </div>
@@ -729,8 +731,8 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
               <div className="w-3 h-3 bg-green-400 rounded-full"></div>
               <h5 className="text-sm font-medium text-green-300">Fixed Code</h5>
             </div>
-            <div className="bg-slate-900/70 rounded-lg p-3 border border-green-500/30">
-              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-64">
+            <div className="bg-slate-900/70 rounded-lg p-3 border border-green-500/30 backdrop-blur-sm">
+              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-64 validation-scrollbar">
                 {final_code}
               </pre>
             </div>
@@ -744,9 +746,9 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     if (!result || !showRawOutput) return null;
     
     return (
-      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4" style={{animation: 'fadeIn 0.5s ease-out'}}>
+      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4 backdrop-blur-sm" style={{animation: 'fadeIn 0.5s ease-out'}}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-white flex items-center space-x-2">
+          <h4 className="font-semibold text-slate-200 flex items-center space-x-2">
             <DocumentTextIcon className="w-4 h-4 text-slate-400" />
             <span>Raw Debug Output</span>
           </h4>
@@ -758,8 +760,8 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           </button>
         </div>
         
-        <div className="bg-slate-900/70 rounded-lg p-4 border border-slate-600/30">
-          <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-64">
+        <div className="bg-slate-900/70 rounded-lg p-4 border border-slate-600/30 backdrop-blur-sm">
+          <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-64 validation-scrollbar">
             {result.raw_output || 'No raw output available'}
           </pre>
         </div>
@@ -769,23 +771,24 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
   // Main render
   return (
-    <div className="w-full max-w-4xl mx-auto bg-slate-900 rounded-lg p-6 shadow-2xl">
+    <div className="w-full max-w-4xl mx-auto bg-slate-900/95 rounded-lg p-6 shadow-2xl backdrop-blur-sm border border-slate-700/50 
+                    max-h-screen overflow-y-auto validation-scrollbar">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg">
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg backdrop-blur-sm">
             <ShieldCheckIcon className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-white font-bold text-xl">Enhanced Playbook Validation</h2>
+            <h2 className="text-slate-100 font-bold text-xl">Enhanced Playbook Validation</h2>
             <div className="text-xs text-slate-400">Real-time Ansible Lint Analysis & Auto-Fix</div>
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2 px-3 py-2 bg-slate-700/50 rounded-lg border border-slate-600/50">
+          <div className="flex items-center space-x-2 px-3 py-2 bg-slate-700/50 rounded-lg border border-slate-600/50 backdrop-blur-sm">
             <Cog6ToothIcon className="w-4 h-4 text-slate-400" />
             <span className="text-sm text-slate-300">Profile:</span>
-            <span className="text-sm font-medium text-white">{getProfileDisplayName(selectedProfile)}</span>
+            <span className="text-sm font-medium text-slate-100">{getProfileDisplayName(selectedProfile)}</span>
           </div>
           <div className={`w-8 h-1 rounded-full bg-gradient-to-r ${getProfileColor(selectedProfile)}`}></div>
         </div>
@@ -794,7 +797,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       {/* Validation Controls */}
       <div className="flex gap-3 mb-6">
         <button
-          className={`flex-1 py-3 rounded-lg font-semibold text-white transition-all duration-300 transform ${
+          className={`flex-1 py-3 rounded-lg font-semibold text-white transition-all duration-300 transform backdrop-blur-sm ${
             loading
               ? "bg-gradient-to-r from-slate-600/50 to-slate-500/50 cursor-not-allowed scale-95"
               : result?.passed
@@ -829,7 +832,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
         {loading && (
           <button
             onClick={handleCancel}
-            className="px-4 py-3 rounded-lg font-semibold text-red-300 border border-red-500/30 hover:bg-red-500/10 transition-colors"
+            className="px-4 py-3 rounded-lg font-semibold text-red-300 border border-red-500/30 hover:bg-red-500/10 transition-colors backdrop-blur-sm"
           >
             Cancel
           </button>
@@ -838,7 +841,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
         {(result || error) && !loading && (
           <button
             onClick={handleReset}
-            className="px-4 py-3 rounded-lg font-semibold text-slate-300 border border-slate-600/50 hover:bg-slate-700/50 transition-colors"
+            className="px-4 py-3 rounded-lg font-semibold text-slate-300 border border-slate-600/50 hover:bg-slate-700/30 transition-colors backdrop-blur-sm"
           >
             Reset
           </button>
@@ -847,7 +850,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
       {/* Progress Indicator */}
       {progress && (
-        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl" style={{animation: 'fadeIn 0.5s ease-out'}}>
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl backdrop-blur-sm" style={{animation: 'fadeIn 0.5s ease-out'}}>
           <div className="flex items-center space-x-2">
             <ArrowPathIcon className="w-5 h-5 text-blue-400" style={{animation: 'spin 1s linear infinite'}} />
             <div className="text-blue-300 text-sm">{progress}</div>
@@ -867,7 +870,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
       {/* Error Display */}
       {error && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-red-500/10 to-rose-500/10 border border-red-500/30 rounded-xl" style={{animation: 'fadeIn 0.5s ease-out'}}>
+        <div className="mb-6 p-4 bg-gradient-to-r from-red-500/10 to-rose-500/10 border border-red-500/30 rounded-xl backdrop-blur-sm" style={{animation: 'fadeIn 0.5s ease-out'}}>
           <div className="flex items-center space-x-2">
             <ExclamationTriangleIcon className="w-5 h-5 text-red-400" />
             <div>
@@ -886,7 +889,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
       {/* No Playbook State */}
       {!playbook || !playbook.trim() ? (
-        <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-600/30">
+        <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-600/30 backdrop-blur-sm">
           <ShieldCheckIcon className="w-16 h-16 text-slate-500 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-slate-300 mb-2">No Playbook Available</h3>
           <div className="text-slate-400 mb-4">Generate a playbook first to validate it</div>
@@ -895,13 +898,13 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20">
           {renderValidationSummary()}
           {renderStreamingSteps()}
           
           {/* Action Buttons */}
           {result && (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between py-4 border-t border-slate-700/50 mt-6 backdrop-blur-sm">
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => setShowCodeComparison(!showCodeComparison)}

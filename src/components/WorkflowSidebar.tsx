@@ -1,48 +1,53 @@
 // WorkflowSidebar.tsx - Complete working code with Ansible Upgrade support
 "use client";
 
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useState, Dispatch, SetStateAction } from "react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import FileTreeSelector, { TreeNode } from "./FileTreeSelector";
-import SelectedFilesPanel from "./SelectedFilesPanel";
-import SourceSelector from "./SourceSelector";
 
 interface WorkflowSidebarProps {
   currentStep: number;
-  sourceType: "upload" | "existing" | "git";
-  setSourceType: (type: "upload" | "existing" | "git") => void;
   loading: boolean;
+  sourceType: "upload" | "existing" | "git";
+  setSourceType: Dispatch<SetStateAction<"upload" | "existing" | "git">>;
   uploadKey: number;
-  handleUpload: (e: ChangeEvent<HTMLInputElement>) => void;
-  folderList: string[];
-  selectedFolder: string;
-  setSelectedFolder: (folder: string) => void;
+  setUploadKey: Dispatch<SetStateAction<number>>;
+  code: string;
+  setCode: Dispatch<SetStateAction<string>>;
   selectedFile: string;
+  setSelectedFile: Dispatch<SetStateAction<string>>;
+  selectedFolder: string;
+  setSelectedFolder: Dispatch<SetStateAction<string>>;
+  folderList: string[];
   fileList: string[];
+  gitUrl: string;
+  setGitUrl: Dispatch<SetStateAction<string>>;
+  // Git-related props that were missing
+  gitRepoName?: string;
+  gitFolderList?: string[];
+  gitFileList?: string[];
+  selectedGitFolder?: string;
+  setSelectedGitFolder?: Dispatch<SetStateAction<string>>;
+  selectedGitFile?: string;
+  setSelectedGitFile?: Dispatch<SetStateAction<string>>;
+  // Function props with correct signatures
+  fetchFolders?: () => void;
   fetchFilesInFolder: (folder: string) => void;
   fetchFileContent: (folder: string, file: string) => void;
-  gitUrl: string;
-  setGitUrl: (url: string) => void;
-  handleCloneRepo: (e: FormEvent) => void;
-  gitRepoName: string;
-  gitFolderList: string[];
-  selectedGitFolder: string;
-  setSelectedGitFolder: (folder: string) => void;
-  gitFileList: string[];
-  selectedGitFile: string;
-  fetchGitFiles: (repo: string, folder: string) => void;
-  fetchGitFileContent: (repo: string, folder: string, file: string) => void;
-  handleManualClassify: (files?: { path: string; content: string }[], technologyType?: string) => void;
-  code: string;
-  setCode?: (code: string) => void;
-  contextConfig?: unknown;
-  setContextConfig?: (config: unknown) => void;
-  conversionConfig?: unknown;
-  setConversionConfig?: (config: unknown) => void;
-  validationConfig?: unknown;
-  setValidationConfig?: (config: unknown) => void;
-  deploymentConfig?: unknown;
-  setDeploymentConfig?: (config: unknown) => void;
+  handleUpload: (e: ChangeEvent<HTMLInputElement>) => Promise<void>;
+  handleCloneRepo: (e: FormEvent) => Promise<void>;
+  fetchGitFiles: (repo: string, folder: string) => Promise<void>;
+  fetchGitFileContent: (repo: string, folder: string, file: string) => Promise<void>;
+  handleManualClassify?: (files?: { path: string; content: string }[], technology?: string) => void;
+  // Config props
+  contextConfig?: Record<string, unknown>;
+  setContextConfig?: (config: Record<string, unknown>) => void;
+  conversionConfig?: Record<string, unknown>;
+  setConversionConfig?: (config: Record<string, unknown>) => void;
+  validationConfig?: Record<string, unknown>;
+  setValidationConfig?: (config: Record<string, unknown>) => void;
+  deploymentConfig?: Record<string, unknown>;
+  setDeploymentConfig?: (config: Record<string, unknown>) => void;
 }
 
 // Clean fetchTree function
@@ -131,7 +136,7 @@ ${file.content}`)
         }
         
         // Pass the files directly (not the combined content) along with technology
-        props.handleManualClassify(data.files, selectedTechnology);
+        props.handleManualClassify?.(data.files, selectedTechnology);
       } else {
         throw new Error("No files received from server or invalid format");
       }
@@ -261,19 +266,19 @@ ${file.content}`)
                 </button>
               </form>
               
-              {props.gitRepoName && (
+              {props.selectedGitFolder && (
                 <div className="space-y-2">
                   <select
                     disabled={props.loading}
                     className="w-full p-2 rounded-lg border border-slate-700 text-sm bg-slate-800 text-slate-200 disabled:opacity-50"
                     value={props.selectedGitFolder}
                     onChange={(e) => {
-                      props.setSelectedGitFolder(e.target.value);
-                      if (e.target.value) props.fetchGitFiles(props.gitRepoName, e.target.value);
+                      props.setSelectedGitFolder?.(e.target.value);
+                      if (e.target.value) props.fetchGitFiles?.(props.gitRepoName || '', e.target.value);
                     }}
                   >
                     <option value="">-- Select Folder --</option>
-                    {props.gitFolderList.map((f, i) => (
+                    {props.folderList?.map((f, i) => (
                       <option key={i} value={f}>📁 {f}</option>
                     ))}
                   </select>
@@ -285,11 +290,11 @@ ${file.content}`)
                       value={props.selectedGitFile}
                       onChange={(e) => {
                         if (e.target.value)
-                          props.fetchGitFileContent(props.gitRepoName, props.selectedGitFolder, e.target.value);
+                          props.fetchGitFileContent?.(props.gitRepoName || '', props.selectedGitFolder || '', e.target.value);
                       }}
                     >
                       <option value="">-- Select File --</option>
-                      {props.gitFileList.map((f, i) => (
+                      {props.fileList?.map((f, i) => (
                         <option key={i} value={f}>📄 {f}</option>
                       ))}
                     </select>
@@ -317,7 +322,7 @@ ${file.content}`)
                 if (props.sourceType === "existing") {
                   handleAnalyzeFiles(selectedFiles);
                 } else {
-                  props.handleManualClassify(undefined, selectedTechnology);
+                  props.handleManualClassify?.();
                 }
               }}
               disabled={
@@ -352,13 +357,13 @@ ${file.content}`)
   // Step 1: Context Configuration
   if (currentStep === 1) {
     return (
-      <SidebarWrapper title="📋 Context Configuration">
+      <SidebarWrapper title=" Context Configuration">
         <div className="space-y-4">
           <div>
             <label className="flex items-center gap-2 text-sm text-gray-300">
               <input
                 type="checkbox"
-                checked={props.contextConfig?.includeComments || false}
+                checked={(props.contextConfig as any)?.includeComments || false}
                 onChange={(e) => props.setContextConfig?.({
                   ...props.contextConfig,
                   includeComments: e.target.checked
@@ -372,7 +377,7 @@ ${file.content}`)
             <label className="flex items-center gap-2 text-sm text-gray-300">
               <input
                 type="checkbox"
-                checked={props.contextConfig?.analyzeDependencies ?? true}
+                checked={(props.contextConfig as any)?.analyzeDependencies ?? true}
                 onChange={(e) => props.setContextConfig?.({
                   ...props.contextConfig,
                   analyzeDependencies: e.target.checked
@@ -385,7 +390,7 @@ ${file.content}`)
           <div>
             <label className="block text-sm text-gray-300 mb-2">Environment Type</label>
             <select
-              value={props.contextConfig?.environmentType || 'development'}
+              value={(props.contextConfig as any)?.environmentType || 'development'}
               onChange={(e) => props.setContextConfig?.({
                 ...props.contextConfig,
                 environmentType: e.target.value
@@ -400,7 +405,7 @@ ${file.content}`)
           <div>
             <label className="block text-sm text-gray-300 mb-2">Scan Depth</label>
             <select
-              value={props.contextConfig?.scanDepth || 'medium'}
+              value={(props.contextConfig as any)?.scanDepth || 'medium'}
               onChange={(e) => props.setContextConfig?.({
                 ...props.contextConfig,
                 scanDepth: e.target.value
@@ -430,7 +435,7 @@ ${file.content}`)
           <div>
             <label className="block text-sm text-gray-300 mb-2">Target Framework</label>
             <select
-              value={props.conversionConfig?.targetFramework || 'ansible'}
+              value={(props.conversionConfig as any)?.targetFramework || 'ansible'}
               onChange={(e) => props.setConversionConfig?.({
                 ...props.conversionConfig,
                 targetFramework: e.target.value
@@ -456,7 +461,7 @@ ${file.content}`)
             <label className="flex items-center gap-2 text-sm text-gray-300">
               <input
                 type="checkbox"
-                checked={props.validationConfig?.syntaxCheck ?? true}
+                checked={(props.validationConfig as any)?.syntaxCheck ?? true}
                 onChange={(e) => props.setValidationConfig?.({
                   ...props.validationConfig,
                   syntaxCheck: e.target.checked
@@ -479,7 +484,7 @@ ${file.content}`)
           <div>
             <label className="block text-sm text-gray-300 mb-2">Deployment Target</label>
             <select
-              value={props.deploymentConfig?.target || 'local'}
+              value={(props.deploymentConfig as any)?.target || 'local'}
               onChange={(e) => props.setDeploymentConfig?.({
                 ...props.deploymentConfig,
                 target: e.target.value

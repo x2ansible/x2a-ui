@@ -4,9 +4,18 @@ const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_U
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(` Proxying files tree to: ${BACKEND_URL}/api/files/tree`);
+    // Get the path parameter from the request
+    const { searchParams } = new URL(request.url);
+    const path = searchParams.get('path');
     
-    const response = await fetch(`${BACKEND_URL}/api/files/tree`, {
+    // Build the backend URL with path parameter if provided
+    const backendUrl = path 
+      ? `${BACKEND_URL}/api/files/tree?path=${encodeURIComponent(path)}`
+      : `${BACKEND_URL}/api/files/tree`;
+    
+    console.log(` Proxying files tree to: ${backendUrl}`);
+    
+    const response = await fetch(backendUrl, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_VALIDATE_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   console.log("🚨 USING ENHANCED ROUTE HANDLER - VERSION 2 🚨");
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
                 const { done, value } = await reader.read();
                 
                 if (done) {
-                  console.log("✅ Stream completed successfully");
+                  console.log(" Stream completed successfully");
                   controller.close();
                   break;
                 }
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Handle OPTIONS requests for CORS
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

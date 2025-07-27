@@ -1,13 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 const BACKEND_URL =
   process.env.LLAMASTACK_API_URL ||
+  process.env.NEXT_PUBLIC_LLAMASTACK_URL ||
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   "http://localhost:8321";
 
+// Helper function to safely extract error details
+function getErrorDetail(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const errorObj = error as Record<string, unknown>;
+    return (errorObj.detail as string) || (errorObj.error as string) || (errorObj.message as string) || 'Unknown error';
+  }
+  return typeof error === 'string' ? error : 'Unknown error';
+}
+
 // POST /api/admin/agents/reload - Refresh agent list from backend
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const response = await fetch(`${BACKEND_URL}/api/admin/agents/refresh`, {
       method: "POST",
@@ -20,7 +30,7 @@ export async function POST(request: NextRequest) {
         err = await response.json();
       } catch {}
       return NextResponse.json(
-        { error: "Failed to refresh agents", detail: err.detail || err.error || err },
+        { error: "Failed to refresh agents", detail: getErrorDetail(err) },
         { status: response.status }
       );
     }

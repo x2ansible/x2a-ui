@@ -185,6 +185,7 @@ export const useAdminConfig = () => {
   }, []);
 
   const updateAgent = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async (agentName: string, agentConfig: AgentConfig["agent_config"]): Promise<AgentConfig> => {
       throw new Error("Agent update not implemented in backend");
     },

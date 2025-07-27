@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 // Use your backend URL structure
 const BACKEND_URL =
   process.env.LLAMASTACK_API_URL ||
+  process.env.NEXT_PUBLIC_LLAMASTACK_URL ||
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   "http://localhost:8321";
 
 // GET /api/admin/agents - List all agents using the new backend structure
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Use the admin endpoint from your backend
     const response = await fetch(`${BACKEND_URL}/api/admin/agents`, {
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
         err = await response.json();
       } catch {}
       return NextResponse.json(
-        { error: "Failed to fetch agents", detail: err.detail || err.error || err },
+        { error: "Failed to fetch agents", detail: (err as Record<string, unknown>)?.detail || (err as Record<string, unknown>)?.error || err },
         { status: response.status }
       );
     }
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     });
 
     const contentType = response.headers.get("content-type") || "";
-    let data =
+    const data =
       contentType.includes("application/json")
         ? await response.json()
         : await response.text();

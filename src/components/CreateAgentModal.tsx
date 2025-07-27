@@ -146,7 +146,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClos
               required
             />
             <p className="text-xs text-slate-400 mt-1">
-              Define the agent's role, capabilities, and behavior
+              Define the agent&apos;s role, capabilities, and behavior
             </p>
           </div>
 
@@ -175,7 +175,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClos
                     } else {
                       setFormData({
                         ...formData,
-                        tools: (formData.tools || []).filter(t => t.name !== "builtin::rag")
+                        tools: (formData.tools || []).filter((t: unknown) => (t as Record<string, unknown>).name !== "builtin::rag")
                       });
                     }
                   }}
@@ -202,7 +202,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClos
                     } else {
                       setFormData({
                         ...formData,
-                        tools: (formData.tools || []).filter(t => t.name !== "ansible_lint_tool")
+                        tools: (formData.tools || []).filter((t: unknown) => (t as Record<string, unknown>).name !== "ansible_lint_tool")
                       });
                     }
                   }}

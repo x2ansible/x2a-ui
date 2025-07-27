@@ -18,7 +18,7 @@ const stepConfig = {
   },
   1: { 
     action: "Analyze Context", 
-    icon: "📋", 
+    icon: "", 
     description: "Gather context and dependencies from classified code",
     requiresCode: false
   },

@@ -16,31 +16,31 @@ const stepActions = {
     action: "Classify Code", 
     icon: "🔍", 
     description: "Analyze and classify the code",
-    canProceed: (result: unknown) => result?.classification?.convertible
+    canProceed: (result: unknown) => (result as any)?.classification?.convertible
   },
   1: { 
     action: "Analyze Context", 
-    icon: "📋", 
+    icon: "", 
     description: "Gather context and dependencies",
-    canProceed: (result: unknown) => result?.context?.dependencies
+    canProceed: (result: unknown) => (result as any)?.context?.dependencies
   },
   2: { 
     action: "Convert Code", 
     icon: "⚙️", 
     description: "Convert to target format",
-    canProceed: (result: unknown) => result?.conversion?.generated_files?.length > 0
+    canProceed: (result: unknown) => (result as any)?.conversion?.generated_files?.length > 0
   },
   3: { 
     action: "Validate Output", 
     icon: "", 
     description: "Validate converted code",
-    canProceed: (result: unknown) => result?.validation?.syntax_valid
+    canProceed: (result: unknown) => (result as any)?.validation?.syntax_valid
   },
   4: { 
     action: "Deploy", 
     icon: "", 
     description: "Deploy to target environment",
-    canProceed: (result: unknown) => result?.deployment?.status === 'success'
+    canProceed: (result: unknown) => (result as any)?.deployment?.status === 'success'
   }
 };
 
@@ -108,16 +108,16 @@ export default function WorkflowActions({
       </div>
 
       {/* Step Status */}
-      {workflowResult && (
+      {!!workflowResult && (
         <div className="mt-3 pt-3 border-t border-gray-600">
           <div className="flex items-center gap-2 text-sm">
-            {workflowResult.status === 'success' && (
+            {(workflowResult as any).status === 'success' && (
               <span className="text-green-400"> Step completed successfully</span>
             )}
-            {workflowResult.status === 'error' && (
+            {(workflowResult as any).status === 'error' && (
               <span className="text-red-400"> Step failed</span>
             )}
-            {workflowResult.status === 'processing' && (
+            {(workflowResult as any).status === 'processing' && (
               <span className="text-yellow-400">⏳ Step in progress</span>
             )}
             

@@ -9,7 +9,7 @@ interface GenerateRequest {
 interface GenerateResponse {
   playbook: string;
   raw?: string;
-  debug_info?: Record<string, any>;
+  debug_info?: Record<string, unknown>;
 }
 
 export function useGeneratePlaybook() {
@@ -57,10 +57,10 @@ export function useGeneratePlaybook() {
 
         setResult(data as GenerateResponse);
       } catch (err: unknown) {
-        if (err?.name === "AbortError") {
+        if ((err as Error)?.name === "AbortError") {
           setError("Request cancelled.");
         } else {
-          setError(err?.message || "Failed to generate playbook.");
+          setError((err as Error)?.message || "Failed to generate playbook.");
         }
       } finally {
         setLoading(false);

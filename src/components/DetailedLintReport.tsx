@@ -9,7 +9,6 @@ import {
   ChevronRightIcon,
   BugAntIcon,
   Cog6ToothIcon,
-  EyeIcon,
   CodeBracketIcon
 } from "@heroicons/react/24/outline";
 
@@ -37,7 +36,11 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
   const toggleSection = (section: string) => {
     setExpandedSections(prev => {
       const copy = new Set(prev);
-      copy.has(section) ? copy.delete(section) : copy.add(section);
+      if (copy.has(section)) {
+        copy.delete(section);
+      } else {
+        copy.add(section);
+      }
       return copy;
     });
   };
@@ -55,29 +58,33 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
       return rawOutput;
     }
     if (typeof rawOutput === 'object' && rawOutput) {
-      if (rawOutput.stdout && rawOutput.stderr) {
-        return `STDOUT:\n${rawOutput.stdout}\n\nSTDERR:\n${rawOutput.stderr}`;
+      const output = rawOutput as Record<string, unknown>;
+      if (output.stdout && output.stderr) {
+        return `STDOUT:\n${output.stdout}\n\nSTDERR:\n${output.stderr}`;
       }
-      if (rawOutput.stdout) return rawOutput.stdout;
-      if (rawOutput.stderr) return rawOutput.stderr;
+      if (output.stdout) return output.stdout as string;
+      if (output.stderr) return output.stderr as string;
       return JSON.stringify(rawOutput, null, 2);
     }
     return 'No raw output available';
   };
 
   const getIssuesByCategory = () => {
-    const issues = validationResult.issues || [];
+    const issues = ((validationResult as Record<string, unknown>).issues as Record<string, unknown>[]) || [];
     const categories = {
-      errors: issues.filter((i: unknown) => (i.severity || i.level || '').toLowerCase() === 'error'),
-      warnings: issues.filter((i: unknown) => (i.severity || i.level || '').toLowerCase() === 'warning'),
-      info: issues.filter((i: unknown) => (i.severity || i.level || '').toLowerCase() === 'info'),
-      other: issues.filter((i: unknown) => !['error', 'warning', 'info'].includes((i.severity || i.level || '').toLowerCase()))
+      errors: issues.filter((i: Record<string, unknown>) => ((i.severity as string) || (i.level as string) || '').toLowerCase() === 'error'),
+      warnings: issues.filter((i: Record<string, unknown>) => ((i.severity as string) || (i.level as string) || '').toLowerCase() === 'warning'),
+      info: issues.filter((i: Record<string, unknown>) => ((i.severity as string) || (i.level as string) || '').toLowerCase() === 'info'),
+      other: issues.filter((i: Record<string, unknown>) => !['error', 'warning', 'info'].includes(((i.severity as string) || (i.level as string) || '').toLowerCase()))
     };
     return categories;
   };
 
   const renderSummaryTab = () => {
-    const { passed, debug_info = {}, issues = [] } = validationResult;
+    const result = validationResult as Record<string, unknown>;
+    const passed = result.passed as boolean;
+    const debug_info = (result.debug_info as Record<string, unknown>) || {};
+    const issues = (result.issues as unknown[]) || [];
     const categories = getIssuesByCategory();
     
     return (
@@ -99,7 +106,7 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
                 Validation {passed ? 'Passed' : 'Failed'}
               </h3>
               <p className="text-slate-400">
-                Playbook analyzed: {debug_info.playbook_length || 'Unknown'} characters
+                Playbook analyzed: {(debug_info.playbook_length as number) || 'Unknown'} characters
               </p>
             </div>
           </div>
@@ -131,34 +138,34 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-slate-400">Profile:</span>
-              <span className="text-white ml-2">{debug_info.profile || 'Unknown'}</span>
+              <span className="text-white ml-2">{(debug_info.profile as string) || 'Unknown'}</span>
             </div>
             <div>
               <span className="text-slate-400">Status:</span>
               <span className={`ml-2 ${passed ? 'text-green-400' : 'text-red-400'}`}>
-                {debug_info.status || (passed ? 'Passed' : 'Failed')}
+                {(debug_info.status as string) || (passed ? 'Passed' : 'Failed')}
               </span>
             </div>
             <div>
               <span className="text-slate-400">Rules Applied:</span>
-              <span className="text-white ml-2">{debug_info.rules_count || 'Unknown'}</span>
+              <span className="text-white ml-2">{(debug_info.rules_count as string) || 'Unknown'}</span>
             </div>
             <div>
               <span className="text-slate-400">Execution Time:</span>
-              <span className="text-white ml-2">{debug_info.execution_time || 'Unknown'}</span>
+              <span className="text-white ml-2">{(debug_info.execution_time as string) || 'Unknown'}</span>
             </div>
           </div>
         </div>
 
         {/* Error Message (if any) */}
-        {validationResult.error_message && (
+        {(validationResult as any).error_message && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
             <h4 className="font-semibold text-red-300 mb-2 flex items-center">
               <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
               Error Details
             </h4>
             <pre className="text-sm text-red-200 font-mono whitespace-pre-wrap">
-              {validationResult.error_message}
+              {(validationResult as any).error_message}
             </pre>
           </div>
         )}
@@ -169,7 +176,7 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
   const renderIssuesTab = () => {
     const categories = getIssuesByCategory();
     
-    if (!validationResult.issues || validationResult.issues.length === 0) {
+    if (!(validationResult as any).issues || (validationResult as any).issues.length === 0) {
       return (
         <div className="text-center py-12">
           <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
@@ -204,7 +211,7 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
 
           {expandedSections.has(title) && (
             <div className="space-y-2 ml-6">
-              {issues.map((issue, idx) => (
+              {issues.map((issue: any, idx: number) => (
                 <div key={idx} className={`p-4 rounded-lg border ${bgColor.replace('bg-', 'border-').replace('/40', '/30')} bg-slate-800/50`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -256,7 +263,7 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
   };
 
   const renderRawTab = () => {
-    const rawOutput = formatRawOutput(validationResult.raw_output);
+    const rawOutput = formatRawOutput((validationResult as any).raw_output);
     
     return (
       <div className="space-y-6">
@@ -278,23 +285,23 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
         </div>
 
         {/* Additional raw data sections */}
-        {validationResult.raw_stdout && (
+        {(validationResult as any).raw_stdout && (
           <div>
             <h4 className="text-md font-semibold text-green-300 mb-2">Standard Output</h4>
             <div className="bg-slate-900/70 rounded-lg p-4 border border-green-500/20">
               <pre className="text-sm text-green-200 font-mono whitespace-pre-wrap overflow-x-auto max-h-48">
-                {validationResult.raw_stdout}
+                {(validationResult as any).raw_stdout}
               </pre>
             </div>
           </div>
         )}
 
-        {validationResult.raw_stderr && (
+        {(validationResult as any).raw_stderr && (
           <div>
             <h4 className="text-md font-semibold text-red-300 mb-2">Standard Error</h4>
             <div className="bg-slate-900/70 rounded-lg p-4 border border-red-500/20">
               <pre className="text-sm text-red-200 font-mono whitespace-pre-wrap overflow-x-auto max-h-48">
-                {validationResult.raw_stderr}
+                {(validationResult as any).raw_stderr}
               </pre>
             </div>
           </div>
@@ -321,7 +328,7 @@ const DetailedLintReport: React.FC<LintReportProps> = ({ validationResult, onClo
         <div className="bg-slate-700/30 rounded-lg p-4">
           <h4 className="font-semibold text-white mb-3">Validation Metadata</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            {Object.entries(validationResult.debug_info || {}).map(([key, value]) => (
+            {Object.entries((validationResult as any).debug_info || {}).map(([key, value]) => (
               <div key={key} className="flex justify-between">
                 <span className="text-slate-400">{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</span>
                 <span className="text-white">{String(value)}</span>

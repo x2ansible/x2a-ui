@@ -3,7 +3,6 @@ import {
   ShieldCheckIcon,
   Cog6ToothIcon,
   CheckCircleIcon,
-  XCircleIcon,
   ClockIcon,
   BoltIcon,
   BeakerIcon,
@@ -16,7 +15,15 @@ import {
   CircleStackIcon
 } from "@heroicons/react/24/outline";
 
+
+
+interface CurrentStep {
+  step?: number;
+  agent_action?: string;
+}
+
 interface ValidationSidebarProps {
+  playbook?: string;
   validationConfig: {
     checkSyntax: boolean;
     securityScan: boolean;
@@ -24,24 +31,29 @@ interface ValidationSidebarProps {
     bestPractices: boolean;
     customRules: string[];
   };
-  setValidationConfig: (config: any) => void;
-  validationResult?: any;
+  setValidationConfig: (config: unknown) => void;
+  validationResult?: Record<string, unknown> | null;
   loading: boolean;
   selectedProfile: string;
   onProfileChange: (profile: string) => void;
+  onLogMessage?: (message: string) => void;
+  onValidationComplete?: (result: unknown) => void;
   // Enhanced props
   streamingActive?: boolean;
-  currentStep?: any;
+  currentStep?: CurrentStep;
   totalSteps?: number;
 }
 
 const ValidationSidebar: React.FC<ValidationSidebarProps> = ({
+  playbook,
   validationConfig,
   setValidationConfig,
   validationResult,
   loading,
   selectedProfile,
   onProfileChange,
+  onLogMessage,
+  onValidationComplete,
   streamingActive = false,
   currentStep = null,
   totalSteps = 0,
@@ -51,7 +63,11 @@ const ValidationSidebar: React.FC<ValidationSidebarProps> = ({
   const toggleSection = (section: string) => {
     setExpandedSections(prev => {
       const copy = new Set(prev);
-      copy.has(section) ? copy.delete(section) : copy.add(section);
+      if (copy.has(section)) {
+        copy.delete(section);
+      } else {
+        copy.add(section);
+      }
       return copy;
     });
   };
@@ -187,14 +203,14 @@ const ValidationSidebar: React.FC<ValidationSidebarProps> = ({
           )}
 
           {/* Validation Results Summary */}
-          {validationResult && !loading && (
+                      {validationResult && !loading && (
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div className="text-center p-2 bg-slate-800/50 rounded">
-                <div className="text-lg font-bold text-purple-400">{validationResult.summary?.fixes_applied || 0}</div>
+                <div className="text-lg font-bold text-purple-400">{(validationResult.summary as any)?.fixes_applied || 0}</div>
                 <div className="text-xs text-slate-400">Fixes</div>
               </div>
               <div className="text-center p-2 bg-slate-800/50 rounded">
-                <div className="text-lg font-bold text-blue-400">{validationResult.summary?.lint_iterations || 0}</div>
+                <div className="text-lg font-bold text-blue-400">{(validationResult.summary as any)?.lint_iterations || 0}</div>
                 <div className="text-xs text-slate-400">Checks</div>
               </div>
             </div>
@@ -209,20 +225,20 @@ const ValidationSidebar: React.FC<ValidationSidebarProps> = ({
               Performance
             </h4>
             <div className="space-y-1 text-xs">
-              {validationResult.duration_ms && (
+              {(validationResult as any).duration_ms && (
                 <div className="flex justify-between">
                   <span className="text-slate-400">Duration:</span>
-                  <span className="text-white">{validationResult.duration_ms}ms</span>
+                  <span className="text-white">{(validationResult as any).duration_ms}ms</span>
                 </div>
               )}
               <div className="flex justify-between">
                 <span className="text-slate-400">Code Size:</span>
-                <span className="text-white">{validationResult.debug_info?.playbook_length || 0} chars</span>
+                <span className="text-white">{(validationResult as any).debug_info?.playbook_length || 0} chars</span>
               </div>
-              {validationResult.total_steps && (
+              {(validationResult as any).total_steps && (
                 <div className="flex justify-between">
                   <span className="text-slate-400">Total Steps:</span>
-                  <span className="text-white">{validationResult.total_steps}</span>
+                  <span className="text-white">{(validationResult as any).total_steps}</span>
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 // src/app/api/chef/analyze/stream/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   try {
@@ -76,8 +76,60 @@ export async function POST(request: NextRequest) {
 
     console.log(' Successfully connected to backend stream');
 
-    // Return the stream directly with proper headers
-    return new Response(response.body, {
+    // Properly handle the streaming response
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          controller.close();
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              console.log("✅ Stream completed successfully");
+              controller.close();
+              break;
+            }
+            
+            if (!value) {
+              continue;
+            }
+            
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process complete lines
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (!trimmedLine) continue;
+              
+              // Forward the line as-is to maintain SSE format
+              controller.enqueue(new TextEncoder().encode(line + '\n'));
+            }
+          }
+        } catch (error) {
+          console.error("❌ Stream reading error:", error);
+          controller.error(error);
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch (lockError) {
+            console.warn("⚠️ Error releasing reader lock:", lockError);
+          }
+        }
+      }
+    });
+
+    return new Response(stream, {
       status: 200,
       headers: {
         'Content-Type': 'text/event-stream',

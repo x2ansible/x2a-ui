@@ -16,21 +16,27 @@ interface DeploymentSidebarProps {
     rollbackStrategy: 'immediate' | 'gradual' | 'none';
     notifications: boolean;
   };
-  setDeploymentConfig: (config: unknown) => void;
-  playbookReady: boolean;
+  setDeploymentConfig?: (config: DeploymentSidebarProps['deploymentConfig']) => void; // Make it optional
+  // Additional props that are actually being used in the working code
+  playbook?: string;
+  playbookReady?: boolean;
+  onLogMessage?: (message: string) => void;
+  onComplete?: () => void;
 }
 
 export default function DeploymentSidebar({ 
   deploymentConfig, 
   setDeploymentConfig, 
-  playbookReady 
+  playbookReady = false
 }: DeploymentSidebarProps) {
   
   const handleConfigChange = (key: string, value: unknown) => {
-    setDeploymentConfig({
-      ...deploymentConfig,
-      [key]: value
-    });
+    if (setDeploymentConfig) {
+      setDeploymentConfig({
+        ...deploymentConfig,
+        [key]: value
+      });
+    }
   };
 
   const handleHostsChange = (hosts: string) => {

@@ -1,13 +1,13 @@
 // app/api/admin/agents/export/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 const BACKEND_URL =
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  "http://host.containers.internal:8000";
+  "http://localhost:8000";
 
 // GET /api/admin/agents/export - Export agent configurations as YAML
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Point to your LlamaStack export endpoint (change if needed!)
     const response = await fetch(`${BACKEND_URL}/v1/agents/export`, {

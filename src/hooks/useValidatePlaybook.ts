@@ -177,7 +177,7 @@ export const useValidatePlaybook = () => {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let collectedSteps: ValidationStep[] = [];
+        const collectedSteps: ValidationStep[] = [];
         let streamComplete = false;
 
         try {
@@ -295,7 +295,7 @@ export const useValidatePlaybook = () => {
       } catch (error: unknown) {
         clearTimeout(timeoutId);
         
-        if (error.name === 'AbortError') {
+        if ((error as Error).name === 'AbortError') {
           console.log("[useValidatePlaybook] Validation was cancelled");
           updateState({
             progress: "Validation cancelled",
@@ -305,7 +305,7 @@ export const useValidatePlaybook = () => {
           return;
         }
 
-        const errorMessage = error.message || "Validation failed";
+        const errorMessage = (error as Error).message || "Validation failed";
         console.error("[useValidatePlaybook] Validation error:", errorMessage);
         
         updateState({
@@ -383,18 +383,19 @@ export const useValidatePlaybook = () => {
 
 // Helper function to create enhanced result
 function createEnhancedResult(
-  data: any, 
+  data: unknown, 
   originalCode: string, 
   streamSteps: ValidationStep[]
 ): EnhancedValidationResult {
-  const steps = data.steps || streamSteps || [];
-  const finalCode = data.final_code || originalCode;
+  const typedData = data as Record<string, unknown>;
+  const steps = (typedData.steps as ValidationStep[]) || streamSteps || [];
+  const finalCode = (typedData.final_code as string) || originalCode;
   
   const lintSteps = steps.filter((s: ValidationStep) => s.agent_action === 'lint');
   const fixSteps = steps.filter((s: ValidationStep) => s.agent_action === 'llm_fix');
   
   return {
-    passed: data.passed || false,
+    passed: (typedData.passed as boolean) || false,
     final_code: finalCode,
     original_code: originalCode,
     steps: steps,
@@ -402,18 +403,18 @@ function createEnhancedResult(
     summary: {
       fixes_applied: fixSteps.length,
       lint_iterations: lintSteps.length,
-      final_status: data.passed ? 'passed' : 'failed',
+      final_status: (typedData.passed as boolean) ? 'passed' : 'failed',
     },
     // Legacy compatibility
     issues: steps.filter((s: ValidationStep) => s.agent_action === 'lint' && s.summary.includes('Failed')),
     raw_output: steps.map((s: ValidationStep) => `Step ${s.step} (${s.agent_action}): ${s.summary}`).join('\n\n'),
     debug_info: {
-      status: data.passed ? "passed" : "failed",
+      status: (typedData.passed as boolean) ? "passed" : "failed",
       playbook_length: originalCode.length,
       steps_completed: steps.length,
       lint_iterations: lintSteps.length,
       fixes_applied: fixSteps.length,
     },
-    error_message: data.passed ? undefined : "Validation completed with issues",
+    error_message: (typedData.passed as boolean) ? undefined : "Validation completed with issues",
   };
 }

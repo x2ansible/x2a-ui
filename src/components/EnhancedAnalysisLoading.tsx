@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle } from 'lucide-react';
 
+// TypeScript interfaces
+interface AnalysisLoadingStateProps {
+  technologyType?: string;
+  analysisType?: string;
+  onComplete?: () => void;
+}
+
+interface EnhancedAnalysisLoadingProps {
+  technologyType: string;
+  onComplete?: () => void;
+}
+
 // Enhanced Analysis Loading Component
-const AnalysisLoadingState = ({ 
+const AnalysisLoadingState: React.FC<AnalysisLoadingStateProps> = ({ 
   technologyType = 'chef', 
-  analysisType = 'analysis',
   onComplete 
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -63,7 +74,7 @@ const AnalysisLoadingState = ({
     }
   };
 
-  const config = techConfig[technologyType] || techConfig.chef;
+  const config = techConfig[technologyType as keyof typeof techConfig] || techConfig.chef;
 
   // Animated progress simulation
   useEffect(() => {
@@ -253,7 +264,7 @@ const AnalysisLoadingState = ({
 };
 
 // Main component for your AnalysisPanel.tsx
-export const EnhancedAnalysisLoading = ({ technologyType, onComplete }) => {
+export const EnhancedAnalysisLoading: React.FC<EnhancedAnalysisLoadingProps> = ({ technologyType, onComplete }) => {
   return (
     <AnalysisLoadingState 
       technologyType={technologyType}

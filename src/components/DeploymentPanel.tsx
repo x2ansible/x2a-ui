@@ -4,8 +4,6 @@ import {
   ClipboardDocumentIcon,
   ExclamationCircleIcon,
   CommandLineIcon,
-  ServerIcon,
-  CloudIcon,
   CheckCircleIcon,
   PlayIcon,
   StopIcon,
@@ -112,7 +110,7 @@ export default function DeploymentPanel({
       { phase: 'executing', duration: 3000, progress: 70, message: deploymentConfig.deploymentMode === 'aap' ? '🎯 Creating job template and executing...' : '⚡ Executing playbook on target hosts...' },
       { phase: 'monitoring', duration: 2000, progress: 90, message: '📊 Monitoring deployment progress...' },
       { phase: 'completing', duration: 1000, progress: 95, message: '🏁 Finalizing deployment...' },
-      { phase: 'success', duration: 500, progress: 100, message: '🎉 Deployment completed successfully!' }
+      { phase: 'success', duration: 500, progress: 100, message: ' Deployment completed successfully!' }
     ];
 
     for (const step of phases) {
@@ -140,7 +138,7 @@ export default function DeploymentPanel({
         deployment_config: deploymentConfig
       };
 
-      logMessage(`📋 Deployment mode: ${deploymentConfig.deploymentMode.toUpperCase()}`);
+      logMessage(` Deployment mode: ${deploymentConfig.deploymentMode.toUpperCase()}`);
       logMessage(`🌍 Environment: ${deploymentConfig.environment}`);
 
       // Start the visual progress simulation
@@ -168,13 +166,13 @@ export default function DeploymentPanel({
       }));
 
       logMessage(` Deployment completed successfully`);
-      if (data.job_id) logMessage(`📋 Job ID: ${data.job_id}`);
+      if (data.job_id) logMessage(` Job ID: ${data.job_id}`);
       if (data.execution_time) logMessage(`⏱️ Execution time: ${data.execution_time}s`);
       
       if (onComplete) onComplete(data);
 
     } catch (err: unknown) {
-      const errorMessage = err.message || "Deployment failed";
+      const errorMessage = err instanceof Error ? err.message : String(err) || "Deployment failed";
       setError(errorMessage);
       setDeploymentState(prev => ({
         ...prev,
@@ -194,8 +192,8 @@ export default function DeploymentPanel({
   const copyLogsToClipboard = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(deploymentState.logs.join('\n'));
-      logMessage(`📋 Deployment logs copied to clipboard`);
-    } catch (err) {
+      logMessage(` Deployment logs copied to clipboard`);
+    } catch {
       logMessage(` Failed to copy logs to clipboard`);
     }
   }, [deploymentState.logs, logMessage]);
@@ -467,7 +465,7 @@ export default function DeploymentPanel({
                   ref={logsRef}
                   className="p-4 bg-slate-900/60 text-slate-100 font-mono text-sm leading-relaxed overflow-auto max-h-64"
                   style={{ 
-                    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, monospace'
+                    fontFamily: 'Monaco, Menlo, Ubuntu Mono, Consolas, monospace'
                   }}
                 >
                   {deploymentState.logs.join('\n')}
@@ -492,7 +490,7 @@ export default function DeploymentPanel({
             </p>
             <div className="bg-slate-800/30 rounded-lg p-4 max-w-sm mx-auto border border-slate-600/20">
               <p className="text-slate-500 text-sm">
-                📋 Complete the previous steps to unlock deployment capabilities
+                 Complete the previous steps to unlock deployment capabilities
               </p>
             </div>
           </div>
@@ -506,7 +504,7 @@ export default function DeploymentPanel({
             </div>
             <h3 className="text-slate-200 text-xl font-bold mb-3">Playbook Ready for Deployment</h3>
             <p className="text-slate-400 text-base mb-6 max-w-lg mx-auto">
-              Your Ansible playbook has been generated and validated. Choose your deployment method and click "Deploy Now" to begin.
+              Your Ansible playbook has been generated and validated. Choose your deployment method and click &quot;Deploy Now&quot; to begin.
             </p>
             <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto">
               <div className="bg-slate-800/30 rounded-lg p-4 border border-slate-600/20">

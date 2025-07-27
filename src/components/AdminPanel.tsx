@@ -10,7 +10,6 @@ import {
   Brain,
   Code,
   Shield,
-  FileText,
   Layers,
   AlertCircle,
   CheckCircle,
@@ -59,6 +58,14 @@ const AGENT_METADATA: Record<
   },
 };
 
+// FIXED: Empty metadata fallback with proper typing
+const EMPTY_AGENT_META = {
+  name: undefined as string | undefined,
+  icon: Brain,
+  description: undefined as string | undefined,
+  color: undefined as string | undefined
+};
+
 type SaveStatus = "saving" | "success" | "error" | null;
 
 const AdminPanel: React.FC = () => {
@@ -70,7 +77,7 @@ const AdminPanel: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [systemInfo, setSystemInfo] = useState<any>(null);
+  const [systemInfo, setSystemInfo] = useState<Record<string, unknown> | null>(null);
 
   // Use the admin config hook
   const {
@@ -80,7 +87,6 @@ const AdminPanel: React.FC = () => {
     getAgentConfigs,
     getAgentConfig,
     updateAgent,
-    reloadConfigs,
     exportConfig,
     createAgent,
     refreshAgents,
@@ -168,7 +174,8 @@ const AdminPanel: React.FC = () => {
         tools: [],
       };
       
-      await updateAgent(selectedAgentName, updateRequest);
+      // FIXED: Added type assertion to resolve TypeScript error
+      await updateAgent(selectedAgentName, updateRequest as AgentConfig["agent_config"]);
 
       // Refresh agent list
       await loadAgentConfigs();
@@ -219,7 +226,8 @@ const AdminPanel: React.FC = () => {
 
   // Handle creation of new agent from modal
   const handleCreateAgent = async (agentRequest: CreateAgentRequest) => {
-    await createAgent(agentRequest);
+    // FIXED: Added type assertion to resolve TypeScript error
+    await createAgent(agentRequest as AgentConfig["agent_config"]);
     await loadAgentConfigs();
   };
 
@@ -253,9 +261,10 @@ const AdminPanel: React.FC = () => {
   }
 
   const currentAgent = agents.find((a) => a.agent_config.name === selectedAgentName);
+  // FIXED: Use EMPTY_AGENT_META instead of empty object
   const agentMeta = selectedAgentName && AGENT_METADATA[selectedAgentName]
     ? AGENT_METADATA[selectedAgentName]
-    : {};
+    : EMPTY_AGENT_META;
 
   const AgentIcon = agentMeta.icon || Brain;
 
@@ -283,8 +292,8 @@ const AdminPanel: React.FC = () => {
                 <span className="text-xs font-medium text-slate-300">System Status</span>
               </div>
               <div className="text-xs text-slate-400 space-y-1">
-                <div>Registered: {systemInfo.registered_agents || 0} agents</div>
-                <div>LlamaStack: {systemInfo.llamastack_url ? "Connected" : "Unknown"}</div>
+                <div>Registered: {(systemInfo?.registered_agents as number) || 0} agents</div>
+                <div>LlamaStack: {(systemInfo?.llamastack_url as string) ? "Connected" : "Unknown"}</div>
               </div>
             </div>
           )}
@@ -321,7 +330,8 @@ const AdminPanel: React.FC = () => {
         <div className="flex-1 p-4 space-y-2 overflow-y-auto">
           {agents.map((agent) => {
             const agentName = agent.agent_config.name;
-            const meta = agentName && AGENT_METADATA[agentName] ? AGENT_METADATA[agentName] : {};
+            // FIXED: Use EMPTY_AGENT_META instead of empty object
+            const meta = agentName && AGENT_METADATA[agentName] ? AGENT_METADATA[agentName] : EMPTY_AGENT_META;
             const IconComponent = meta.icon || Brain;
             const isSelected = selectedAgentName === agentName;
             

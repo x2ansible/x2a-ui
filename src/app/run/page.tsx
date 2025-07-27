@@ -26,10 +26,11 @@ import { useBladeLogicAnalyse } from "@/hooks/analyse/bladelogic/useBladeLogicAn
 import { useShellAnalyse } from "@/hooks/analyse/shell/useShellAnalyse";
 import { useSaltAnalyse } from "@/hooks/analyse/salt/useSaltAnalyse";
 import { useAnsibleUpgradeAnalyse } from "@/hooks/analyse/ansible-upgrade/useAnsibleUpgradeAnalyse";
+import { usePuppetAnalyse } from "@/hooks/analyse/puppet/usePuppetAnalyse";
 
 import { BackendAnalysisResponse } from "@/components/analyse/types/BackendTypes";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://host.containers.internal:8000";
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 const steps = ["Analyze", "Context", "Convert", "Validate", "Deploy"];
 
 function RunWorkflowPageInner() {
@@ -62,10 +63,16 @@ function RunWorkflowPageInner() {
   const [analysisResult, setAnalysisResult] = useState<BackendAnalysisResponse | undefined>(undefined);
   const [retrievedContext, setRetrievedContext] = useState<string>("");
   const [generatedPlaybook, setGeneratedPlaybook] = useState<string>("");
-  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validationResult, setValidationResult] = useState<Record<string, unknown> | null>(null);
 
-  // UPDATED: Add ansible-upgrade to technology type
-  const [technologyType, setTechnologyType] = useState<"chef" | "bladelogic" | "shell" | "salt" | "ansible-upgrade">("chef");
+  // UPDATED: Add puppet to technology type
+  const [technologyType, setTechnologyType] = useState<"chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade">("chef");
+
+  // Add vectorDbId state
+  const [vectorDbId] = useState<string>("iac"); // Default to "iac" knowledge base
+
+  // Add state for the selected database ID
+  const [selectedVectorDbId, setSelectedVectorDbId] = useState<string>("iac");
 
   // Config states
   const [contextConfig, setContextConfig] = useState({
@@ -90,6 +97,7 @@ function RunWorkflowPageInner() {
     bestPractices: true,
     customRules: [] as string[]
   });
+  const [validationProfile, setValidationProfile] = useState<string>('basic');
   const [deploymentConfig, setDeploymentConfig] = useState({
     environment: 'development' as 'development' | 'staging' | 'production',
     deploymentMode: 'direct' as 'aap' | 'direct',
@@ -207,7 +215,7 @@ function RunWorkflowPageInner() {
     addLog: addLogMessage
   });
 
-  // NEW: Ansible Upgrade analysis hook
+  // Ansible Upgrade analysis hook
   const { analyseAnsibleUpgrade } = useAnsibleUpgradeAnalyse({
     BACKEND_URL,
     files: {},
@@ -222,8 +230,34 @@ function RunWorkflowPageInner() {
     addLog: addLogMessage
   });
 
-  // UPDATED: Smart technology detection with ansible-upgrade support
-  const detectTechnologyType = (files: { path: string; content: string }[]): "chef" | "bladelogic" | "shell" | "salt" | "ansible-upgrade" => {
+  // Puppet analysis hook
+  const { analysePuppet } = usePuppetAnalyse({
+    BACKEND_URL,
+    files: {},
+    setAnalysisResult: useCallback((result) => {
+      setAnalysisResult(result);
+      if (result && result.success !== false) {
+        markStepAsCompleted(0);
+        addLogMessage("Puppet analysis completed - ready for next step");
+      }
+    }, [markStepAsCompleted, addLogMessage]),
+    setLoading,
+    addLog: addLogMessage
+  });
+
+  // UPDATED: Smart technology detection with puppet support
+  const detectTechnologyType = (files: { path: string; content: string }[]): "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade" => {
+    // Check for Puppet manifests first
+    if (files.some(f => 
+      f.path.endsWith('.pp') || 
+      f.path.includes('puppet') ||
+      /class\s+\w+|define\s+\w+|node\s+['"]?\w+['"]?/i.test(f.content) ||
+      /package\s*{|service\s*{|file\s*{|exec\s*{|user\s*{|group\s*{/i.test(f.content) ||
+      /ensure\s*=>|require\s*=>|before\s*=>|notify\s*=>|subscribe\s*=>/i.test(f.content)
+    )) {
+      return "puppet";
+    }
+    
     // Check for Ansible playbooks/roles first
     if (files.some(f => 
       f.path.endsWith('.yml') || 
@@ -275,13 +309,13 @@ function RunWorkflowPageInner() {
     return "chef";
   };
 
-  // UPDATED: Main analysis trigger with ansible-upgrade support
-  const handleManualClassify = useCallback((files?: { path: string; content: string }[], technology?: "chef" | "bladelogic" | "shell" | "salt" | "ansible-upgrade") => {
+  // UPDATED: Main analysis trigger with puppet support
+  const handleManualClassify = useCallback((files?: { path: string; content: string }[], technology?: string) => {
     if (loading) {
       addLogMessage("Analysis already in progress");
       return;
     }
-    let detectedTech: "chef" | "bladelogic" | "shell" | "salt" | "ansible-upgrade" = technologyType;
+    let detectedTech: "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade" = technologyType;
     let filesObj: Record<string, string> = {};
 
     if (files && files.length > 0) {
@@ -296,22 +330,25 @@ function RunWorkflowPageInner() {
       setAnalysisFiles(filesObj);
       addLogMessage(`Selected ${files.length} files: ${Object.keys(filesObj).join(", ")}`);
       addLogMessage(`Total size: ${Object.values(filesObj).reduce((sum, c) => sum + c.length, 0)} characters`);
-      detectedTech = technology || detectTechnologyType(files);
+      detectedTech = (technology as "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade") || detectTechnologyType(files);
       setTechnologyType(detectedTech);
     } else if (code.trim()) {
       const fileName = selectedFile || selectedGitFile || "uploaded_file";
       filesObj = { [fileName]: code };
       setAnalysisFiles(filesObj);
       addLogMessage(`Starting single file analysis...`);
-      detectedTech = technology || detectTechnologyType([{ path: fileName, content: code }]);
+      detectedTech = (technology as "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade") || detectTechnologyType([{ path: fileName, content: code }]);
       setTechnologyType(detectedTech);
     } else {
       addLogMessage("No code loaded. Please select or upload a file first");
       return;
     }
     
-    // Route to appropriate analysis including ansible-upgrade
-    if (detectedTech === "ansible-upgrade") {
+    // Route to appropriate analysis including puppet
+    if (detectedTech === "puppet") {
+      console.log('🎭 Routing to Puppet analysis with filesObj:', filesObj);
+      analysePuppet(filesObj);
+    } else if (detectedTech === "ansible-upgrade") {
       analyseAnsibleUpgrade(filesObj);
     } else if (detectedTech === "salt") {
       analyseSalt(filesObj);
@@ -322,7 +359,7 @@ function RunWorkflowPageInner() {
     } else {
       analyseChef(filesObj);
     }
-  }, [loading, addLogMessage, code, analyseChef, analyseBladeLogic, analyseShell, analyseSalt, analyseAnsibleUpgrade, selectedFile, selectedGitFile, technologyType]);
+  }, [loading, addLogMessage, code, analyseChef, analyseBladeLogic, analysePuppet, analyseShell, analyseSalt, analyseAnsibleUpgrade, selectedFile, selectedGitFile, technologyType]);
 
   // Mark Convert step completed when playbook is generated
   const handleGenerateComplete = useCallback((playbook: string) => {
@@ -332,8 +369,8 @@ function RunWorkflowPageInner() {
   }, [setGeneratedPlaybook, markStepAsCompleted, addLogMessage]);
 
   // Mark Validate step completed when validation finishes
-  const handleValidationComplete = useCallback((result: any) => {
-    setValidationResult(result);
+  const handleValidationComplete = useCallback((result: unknown) => {
+    setValidationResult(result as Record<string, unknown>);
     markStepAsCompleted(3);
     addLogMessage("Validation completed - ready for deployment");
   }, [setValidationResult, markStepAsCompleted, addLogMessage]);
@@ -419,77 +456,87 @@ function RunWorkflowPageInner() {
         <div className="x2a-side-panel rh-scrollbar overflow-auto">
           {step === 1 ? (
             <ContextSidebar
-              vectorDbId="iac"
+              vectorDbId={vectorDbId}
               contextConfig={contextConfig}
               setContextConfig={setContextConfig}
-              onDocUploaded={() => {}}
+              onDocUploaded={() => {
+                addLogMessage("Conversion pattern uploaded successfully");
+                // Optionally refresh context or trigger other actions
+              }}
+              onDatabaseChange={setSelectedVectorDbId} // NEW: Add this prop
             />
           ) : step === 2 ? (
             <GenerateSidebar
               conversionConfig={conversionConfig}
-              setConversionConfig={setConversionConfig}
-              contextSummary={{
-                tokens: retrievedContext.length,
-                docCount: 3,
-                topics: ["package install", "systemd", "templating"]
-              }}
+              setConversionConfig={setConversionConfig as (config: unknown) => void}
+              contextSummary={retrievedContext}
+              code={code}
+              analysisFiles={analysisFiles}
+              context={retrievedContext}
+              classificationResult={analysisResult}
+              onLogMessage={addLogMessage}
+              onComplete={handleGenerateComplete}
             />
           ) : step === 3 ? (
             <ValidationSidebar
+              playbook={generatedPlaybook}
               validationConfig={validationConfig}
-              setValidationConfig={setValidationConfig}
+              setValidationConfig={setValidationConfig as (config: unknown) => void}
               validationResult={validationResult}
               loading={loading}
+              selectedProfile={validationProfile}
+              onProfileChange={setValidationProfile}
+              onLogMessage={addLogMessage}
+              onValidationComplete={handleValidationComplete}
             />
           ) : step === 4 ? (
             <DeploymentSidebar
-              deploymentConfig={{
-                environment: deploymentConfig.environment,
-                deploymentMode: deploymentConfig.deploymentMode,
-                targetHosts: deploymentConfig.targetHosts,
-                rollbackStrategy: deploymentConfig.rollbackStrategy,
-                notifications: deploymentConfig.notifications
-              }}
-              setDeploymentConfig={setDeploymentConfig}
-              playbookReady={generatedPlaybook.length > 0}
+              playbook={generatedPlaybook}
+              deploymentConfig={deploymentConfig}
+              onLogMessage={addLogMessage}
+              onComplete={() => markStepAsCompleted(4)}
             />
           ) : (
             <WorkflowSidebar
               currentStep={step}
+              loading={loading}
               sourceType={sourceType}
               setSourceType={setSourceType}
-              loading={loading}
               uploadKey={uploadKey}
-              handleUpload={handleUpload}
-              folderList={folderList}
+              setUploadKey={setUploadKey}
+              code={code}
+              setCode={setCode}
+              selectedFile={selectedFile}
+              setSelectedFile={setSelectedFile}
               selectedFolder={selectedFolder}
               setSelectedFolder={setSelectedFolder}
-              selectedFile={selectedFile}
+              folderList={folderList}
               fileList={fileList}
-              fetchFilesInFolder={fetchFilesInFolder}
-              fetchFileContent={fetchFileContent}
               gitUrl={gitUrl}
               setGitUrl={setGitUrl}
-              handleCloneRepo={handleCloneRepo}
               gitRepoName={gitRepoName}
               gitFolderList={gitFolderList}
+              gitFileList={gitFileList}
               selectedGitFolder={selectedGitFolder}
               setSelectedGitFolder={setSelectedGitFolder}
-              gitFileList={gitFileList}
               selectedGitFile={selectedGitFile}
+              setSelectedGitFile={setSelectedGitFile}
+              fetchFolders={fetchFolders}
+              fetchFilesInFolder={fetchFilesInFolder}
+              fetchFileContent={fetchFileContent}
+              handleUpload={handleUpload}
+              handleCloneRepo={handleCloneRepo}
               fetchGitFiles={fetchGitFiles}
               fetchGitFileContent={fetchGitFileContent}
               handleManualClassify={handleManualClassify}
-              code={code}
-              setCode={setCode}
               contextConfig={contextConfig}
-              setContextConfig={setContextConfig}
+              setContextConfig={setContextConfig as (config: unknown) => void}
               conversionConfig={conversionConfig}
-              setConversionConfig={setConversionConfig}
+              setConversionConfig={setConversionConfig as (config: unknown) => void}
               validationConfig={validationConfig}
-              setValidationConfig={setValidationConfig}
+              setValidationConfig={setValidationConfig as (config: unknown) => void}
               deploymentConfig={deploymentConfig}
-              setDeploymentConfig={setDeploymentConfig}
+              setDeploymentConfig={setDeploymentConfig as (config: unknown) => void}
             />
           )}
         </div>
@@ -502,6 +549,7 @@ function RunWorkflowPageInner() {
               analysisFiles={analysisFiles}
               onLogMessage={addLogMessage}
               onContextRetrieved={setRetrievedContext}
+              vectorDbId={selectedVectorDbId} // NEW: Add this prop
             />
           ) : step === 2 ? (
             <GeneratePanel
@@ -546,11 +594,8 @@ function RunWorkflowPageInner() {
           ) : (
             <AnalysisPanel
               result={analysisResult}
-              selectedFile={selectedFile}
-              selectedGitFile={selectedGitFile}
-              code={code}
               loading={loading}
-              step={step}
+              error={null}
               technologyType={technologyType}
             />
           )}

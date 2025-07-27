@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { 
   SparklesIcon, 
   ClipboardDocumentIcon, 
   ExclamationCircleIcon,
   CodeBracketIcon,
   StopIcon,
-  CheckCircleIcon,
   ArrowPathIcon
 } from "@heroicons/react/24/outline";
 
@@ -31,14 +30,13 @@ export default function GeneratePanel({
   code, 
   analysisFiles = {},
   context, 
-  classificationResult, 
   onLogMessage, 
   onComplete 
 }: GeneratePanelProps) {
   const [playbook, setPlaybook] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [panelMode, setPanelMode] = useState<PanelMode>('ready');
+  const [, setPanelMode] = useState<PanelMode>('ready');
   const [hasGenerated, setHasGenerated] = useState(false);
   const [copiedFeedback, setCopiedFeedback] = useState(false);
 
@@ -50,6 +48,9 @@ export default function GeneratePanel({
     currentIndex: 0
   });
 
+  // Add generation phase tracking
+  const [generationPhase, setGenerationPhase] = useState<'idle' | 'processing' | 'rendering' | 'complete'>('idle');
+
   const streamingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const codeCanvasRef = useRef<HTMLPreElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -60,28 +61,34 @@ export default function GeneratePanel({
 
   const startStreaming = useCallback((fullText: string) => {
     setPanelMode('generating');
+    setGenerationPhase('rendering');
     setStreamingState({
       isStreaming: true,
       currentText: '',
       fullText,
       currentIndex: 0
     });
+    
     let currentIndex = 0;
     streamingIntervalRef.current = setInterval(() => {
       if (currentIndex >= fullText.length) {
         setStreamingState(prev => ({ ...prev, isStreaming: false }));
         if (streamingIntervalRef.current) clearInterval(streamingIntervalRef.current);
         setPanelMode('complete');
+        setGenerationPhase('complete');
         setHasGenerated(true);
         logMessage("✨ Playbook generation completed");
         if (onComplete) setTimeout(() => onComplete(fullText), 500);
         return;
       }
+      
+      // Slightly faster streaming for better UX
       let charsToAdd = 1;
       const char = fullText[currentIndex];
       if (char === '\n') charsToAdd = 1;
-      else if (char === ' ') charsToAdd = Math.min(2, fullText.length - currentIndex);
-      else if (/[a-zA-Z0-9]/.test(char)) charsToAdd = Math.min(3, fullText.length - currentIndex);
+      else if (char === ' ') charsToAdd = Math.min(3, fullText.length - currentIndex);
+      else if (/[a-zA-Z0-9]/.test(char)) charsToAdd = Math.min(5, fullText.length - currentIndex);
+      
       const newText = fullText.substring(0, currentIndex + charsToAdd);
       setStreamingState(prev => ({
         ...prev,
@@ -90,7 +97,7 @@ export default function GeneratePanel({
       }));
       currentIndex += charsToAdd;
       if (codeCanvasRef.current) codeCanvasRef.current.scrollTop = codeCanvasRef.current.scrollHeight;
-    }, 20);
+    }, 15); // Slightly faster interval
   }, [logMessage, onComplete]);
 
   const stopStreaming = useCallback(() => {
@@ -101,6 +108,7 @@ export default function GeneratePanel({
       currentText: prev.fullText
     }));
     setPanelMode('complete');
+    setGenerationPhase('complete');
     setHasGenerated(true);
     logMessage("⏹️ Streaming stopped");
   }, [logMessage]);
@@ -118,6 +126,7 @@ export default function GeneratePanel({
     setLoading(true);
     setError(null);
     setPlaybook("");
+    setGenerationPhase('processing');
     setStreamingState({ isStreaming: false, currentText: '', fullText: '', currentIndex: 0 });
     logMessage("🚀 Starting playbook generation...");
     
@@ -134,12 +143,14 @@ export default function GeneratePanel({
         context: context
       };
       
-      logMessage(`📤 Sending ${hasAnalyzedFiles ? Object.keys(analysisFiles).length + ' files' : 'single file'} for conversion...`);
+      logMessage(` Sending ${hasAnalyzedFiles ? Object.keys(analysisFiles).length + ' files' : 'single file'} for conversion...`);
       
-      // Use Next.js API route instead of direct backend call
       const response = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: { 
+          "Content-Type": "application/json", 
+          "Accept": "text/event-stream"
+        },
         body: JSON.stringify(payload)
       });
       
@@ -148,18 +159,59 @@ export default function GeneratePanel({
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
-      const data = await response.json();
-      if (data.playbook) {
-        setPlaybook(data.playbook);
-        startStreaming(data.playbook);
-        logMessage(`✅ Playbook generated: ${data.playbook.length} characters`);
-        if (onComplete) onComplete(data.playbook);
-      } else {
-        throw new Error("No playbook in response");
+      // Handle streaming response
+      logMessage("📡 Receiving streaming response...");
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body reader available");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalPlaybook = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          
+          if (trimmed.startsWith("data: ")) {
+            try {
+              const jsonStr = trimmed.slice(6).trim();
+              if (jsonStr === "[DONE]") {
+                logMessage("✅ Stream completed");
+                continue;
+              }
+              const eventData = JSON.parse(jsonStr);
+              if (eventData.playbook || eventData.data) {
+                finalPlaybook = eventData.playbook || eventData.data;
+                logMessage("✅ Playbook received from stream");
+              }
+            } catch {
+              continue;
+            }
+          }
+        }
       }
+
+      if (!finalPlaybook) throw new Error("No playbook received from stream");
+
+      // Keep the existing animation - just pass the playbook to startStreaming
+      setPlaybook(finalPlaybook);
+      startStreaming(finalPlaybook); // ✅ Keep the animation!
+      logMessage(`✅ Playbook generated: ${finalPlaybook.length} characters`);
+      if (onComplete) onComplete(finalPlaybook);
+        
     } catch (err: unknown) {
-      const errorMessage = err?.message || "Generation failed";
+      const errorMessage = err instanceof Error ? err.message : "Generation failed";
       setError(errorMessage);
+      setGenerationPhase('idle');
       logMessage(`❌ Generation failed: ${errorMessage}`);
     } finally {
       setLoading(false);
@@ -172,7 +224,7 @@ export default function GeneratePanel({
       setCopiedFeedback(true);
       setTimeout(() => setCopiedFeedback(false), 2000);
       logMessage("📋 Copied to clipboard");
-    } catch (err) {
+    } catch {
       logMessage("❌ Failed to copy to clipboard");
     }
   }, [logMessage]);
@@ -181,6 +233,48 @@ export default function GeneratePanel({
   const hasAnalyzedFiles = Object.keys(analysisFiles).length > 0;
   const hasCode = code.trim();
   const hasAnyData = hasAnalyzedFiles || hasCode;
+
+  // Enhanced status message for large content
+  const getStatusMessage = () => {
+    if (generationPhase === 'processing') {
+      return {
+        title: 'Generating Ansible Playbook',
+        subtitle: 'AI agent is analyzing your infrastructure code and creating optimized Ansible content...',
+        icon: '',
+        color: 'blue'
+      };
+    }
+    
+    if (generationPhase === 'rendering') {
+      const isLarge = streamingState.fullText.length > 10000;
+      return {
+        title: isLarge ? 'Rendering Large Ansible Playbook' : 'Rendering Ansible Playbook',
+        subtitle: isLarge 
+          ? 'AI agent is formatting and displaying your large Ansible content...'
+          : 'AI agent is formatting and displaying your generated Ansible content...',
+        icon: '',
+        color: 'green'
+      };
+    }
+    
+    if (generationPhase === 'complete') {
+      return {
+        title: 'Ansible Playbook Complete',
+        subtitle: `Successfully generated ${streamingState.fullText.length} characters of Ansible content`,
+        icon: '',
+        color: 'green'
+      };
+    }
+    
+    return {
+      title: 'Ready to Generate',
+      subtitle: hasAnyData ? 'Click Generate to convert your infrastructure code to Ansible' : 'Upload files or complete analysis first',
+      icon: '⚡',
+      color: 'gray'
+    };
+  };
+
+  const statusInfo = getStatusMessage();
 
   return (
     <div ref={panelRef} className="h-full w-full flex flex-col bg-black overflow-hidden">
@@ -224,7 +318,7 @@ export default function GeneratePanel({
             
             <div className="flex items-center space-x-3">
               {/* Status */}
-              {hasAnyData && (
+              {hasAnyData && generationPhase === 'idle' && (
                 <div className="px-3 py-1.5 bg-green-900/30 border border-green-500/30 rounded-full flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                   <span className="text-green-300 text-xs font-medium">
@@ -265,45 +359,77 @@ export default function GeneratePanel({
                   </>
                 )}
               </button>
+              
+              {/* Skip Streaming Button */}
+              {streamingState.isStreaming && (
+                <button
+                  onClick={() => {
+                    setStreamingState(prev => ({
+                      ...prev,
+                      isStreaming: false,
+                      currentText: prev.fullText,
+                      currentIndex: prev.fullText.length
+                    }));
+                    setPanelMode('complete');
+                    setGenerationPhase('complete');
+                    setHasGenerated(true);
+                    logMessage("⏭️ Streaming skipped - showing full content");
+                  }}
+                  className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-xs font-medium transition-colors"
+                >
+                  Skip Streaming
+                </button>
+              )}
             </div>
           </div>
           
           {/* Generation Status */}
-          {(panelMode === 'generating' || panelMode === 'complete') && (
+          {generationPhase !== 'idle' && (
             <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
               <div className="flex items-center space-x-3">
                 <div className="relative">
-                  <CodeBracketIcon className="w-5 h-5 text-emerald-400" />
-                  {streamingState.isStreaming && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-ping"></div>
+                  <CodeBracketIcon className={`w-5 h-5 ${
+                    generationPhase === 'processing' ? 'text-blue-400' :
+                    generationPhase === 'rendering' ? 'text-emerald-400' :
+                    'text-green-400'
+                  }`} />
+                  {(generationPhase === 'processing' || generationPhase === 'rendering') && (
+                    <div className={`absolute -top-1 -right-1 w-3 h-3 ${
+                      generationPhase === 'processing' ? 'bg-blue-400' : 'bg-emerald-400'
+                    } rounded-full animate-ping`}></div>
                   )}
                 </div>
                 <div>
                   <span className="text-white font-medium text-sm">
-                    {streamingState.isStreaming ? 'Streaming...' : 
-                     panelMode === 'complete' ? `Generated ${playbook.length} characters` : 'Processing...'}
+                    {statusInfo.title}
                   </span>
                 </div>
               </div>
               
               <div className="flex items-center space-x-2">
                 {/* Status Badge */}
-                {streamingState.isStreaming ? (
-                  <div className="px-2 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-full">
-                    <span className="text-emerald-300 text-xs font-medium">STREAMING</span>
+                {generationPhase === 'processing' && (
+                  <div className="px-2 py-1 bg-blue-900/30 border border-blue-500/30 rounded-full">
+                    <span className="text-blue-300 text-xs font-medium">PROCESSING</span>
                   </div>
-                ) : panelMode === 'complete' ? (
+                )}
+                {generationPhase === 'rendering' && (
+                  <div className="px-2 py-1 bg-emerald-900/30 border border-emerald-500/30 rounded-full">
+                    <span className="text-emerald-300 text-xs font-medium">RENDERING</span>
+                  </div>
+                )}
+                {generationPhase === 'complete' && (
                   <div className="px-2 py-1 bg-green-900/30 border border-green-500/30 rounded-full">
                     <span className="text-green-300 text-xs font-medium">COMPLETE</span>
                   </div>
-                ) : null}
+                )}
                 
                 {/* Action Buttons */}
                 {streamingState.isStreaming && (
                   <button
                     onClick={stopStreaming}
                     className="p-1.5 text-red-400 hover:text-red-300 transition-colors rounded hover:bg-red-500/20"
-                    title="Stop streaming"
+                    title="Stop rendering"
                   >
                     <StopIcon className="w-4 h-4" />
                   </button>
@@ -391,29 +517,23 @@ export default function GeneratePanel({
                   {/* Status Text */}
                   <div className="mb-6">
                     <h3 className="text-white text-xl font-bold mb-2 flex items-center justify-center gap-2">
-                      {streamingState.isStreaming ? (
-                        <>
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          Streaming Playbook
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-                          Generating Ansible Content
-                        </>
-                      )}
+                      <div className={`w-2 h-2 ${
+                        generationPhase === 'processing' ? 'bg-blue-400' : 'bg-green-400'
+                      } rounded-full animate-pulse`}></div>
+                      {statusInfo.title}
                     </h3>
                     <p className="text-gray-400 text-sm">
-                      {streamingState.isStreaming 
-                        ? 'AI agent is streaming your Ansible playbook...'
-                        : 'AI agent is analyzing your infrastructure code...'
-                      }
+                      {statusInfo.subtitle}
                     </p>
                   </div>
                   
                   {/* Progress Simulation */}
                   <div className="w-full bg-gray-800 rounded-full h-2 mb-6 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full animate-progress"></div>
+                    <div className={`h-full bg-gradient-to-r ${
+                      generationPhase === 'processing' 
+                        ? 'from-blue-500 to-blue-600' 
+                        : 'from-green-500 to-green-600'
+                    } rounded-full animate-progress`}></div>
                   </div>
                   
                   {/* Animated Steps */}
@@ -422,7 +542,7 @@ export default function GeneratePanel({
                       { text: 'Parsing infrastructure code', delay: '0s', icon: '📄' },
                       { text: 'Analyzing dependencies', delay: '1s', icon: '🔍' },
                       { text: 'Optimizing for Ansible', delay: '2s', icon: '⚙️' },
-                      { text: streamingState.isStreaming ? 'Streaming results' : 'Generating YAML', delay: '3s', icon: streamingState.isStreaming ? '📡' : '📝' }
+                      { text: generationPhase === 'rendering' ? 'Rendering playbook' : 'Generating YAML', delay: '3s', icon: generationPhase === 'rendering' ? '📝' : '📡' }
                     ].map((step, index) => (
                       <div 
                         key={index}
@@ -537,7 +657,7 @@ export default function GeneratePanel({
         @keyframes progress {
           0% { width: 0%; }
           20% { width: 30%; }
-           { width: 60%; }
+          60% { width: 60%; }
           80% { width: 85%; }
           100% { width: 95%; }
         }

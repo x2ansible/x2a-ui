@@ -4,13 +4,13 @@ import { BackendAnalysisResponse } from "@/components/analyse/types/BackendTypes
 interface UseBladeLogicAnalyseProps {
   BACKEND_URL: string;
   files: { name: string; content: string }[] | Record<string, string>;
-  setAnalysisResult: (result: BackendAnalysisResponse | null) => void;
+  setAnalysisResult: (result: BackendAnalysisResponse | undefined) => void; // Changed from null
   setLoading: (loading: boolean) => void;
   addLog: (msg: string) => void;
 }
 
 export const useBladeLogicAnalyse = ({
-  BACKEND_URL,
+  // BACKEND_URL, // Removed as it's assigned but never used
   files,
   setAnalysisResult,
   setLoading,
@@ -86,7 +86,7 @@ export const useBladeLogicAnalyse = ({
 
         const decoder = new TextDecoder();
         let buffer = "";
-        let finalResult: any = null;
+        let finalResult: Record<string, unknown> | null = null;
         let hasReceivedData = false;
 
         while (true) {
@@ -103,7 +103,7 @@ export const useBladeLogicAnalyse = ({
 
             hasReceivedData = true;
 
-            let eventData: any = null;
+            let eventData: Record<string, unknown> | null = null;
 
             if (trimmed.startsWith("data: ")) {
               try {
@@ -131,13 +131,13 @@ export const useBladeLogicAnalyse = ({
 
             if (eventData) {
               if (eventData.type === "final_analysis" || eventData.type === "result") {
-                finalResult = eventData.data || eventData;
+                finalResult = (eventData.data || eventData) as Record<string, unknown>;
                 addLog(" Analysis complete - processing results...");
               } else if (eventData.type === "progress" || eventData.type === "status") {
                 const message = eventData.message || eventData.status || "Processing...";
-                addLog(`📋 ${message}`);
+                addLog(` ${message}`);
               } else if (eventData.type === "error") {
-                throw new Error(eventData.error || eventData.message || "Backend reported an error");
+                throw new Error(String(eventData.error || eventData.message || "Backend reported an error"));
               } else if (eventData.type === "log") {
                 addLog(`🔍 ${eventData.message || eventData.data}`);
               } else if (!eventData.type && eventData.detailed_analysis) {
@@ -166,39 +166,40 @@ export const useBladeLogicAnalyse = ({
           success: finalResult.success !== false,
           duration_ms: Date.now() - startTime,
           metadata: {
-            ...finalResult.metadata,
+            ...(finalResult.metadata as Record<string, unknown> || {}),
             analyzed_at: new Date().toISOString(),
             analysis_duration_ms: Date.now() - startTime,
             files_analyzed: inputFiles.map(f => f.name),
             total_code_size: inputFiles.reduce((sum, f) => sum + f.content.length, 0),
-            technology_type: finalResult.metadata?.technology_type || 'bladelogic',
-            agent_name: finalResult.metadata?.agent_name || 'BladeLogic Analysis Agent',
-            agent_icon: finalResult.metadata?.agent_icon || '⚔️'
+            technology_type: (finalResult.metadata as Record<string, unknown>)?.technology_type as string || 'bladelogic',
+            agent_name: (finalResult.metadata as Record<string, unknown>)?.agent_name as string || 'BladeLogic Analysis Agent',
+            agent_icon: (finalResult.metadata as Record<string, unknown>)?.agent_icon as string || '⚔️'
           }
         };
 
         setAnalysisResult(analysisResult);
 
-        if (finalResult.functionality?.primary_purpose) {
-          addLog(` Purpose: ${finalResult.functionality.primary_purpose}`);
+        const typedResult = finalResult as BackendAnalysisResponse;
+        if (typedResult.functionality?.primary_purpose) {
+          addLog(` Purpose: ${typedResult.functionality.primary_purpose}`);
         }
-        if (finalResult.version_requirements?.migration_effort) {
-          const effort = finalResult.version_requirements.migration_effort;
-          const hours = finalResult.version_requirements.estimated_hours;
+        if (typedResult.version_requirements?.migration_effort) {
+          const effort = typedResult.version_requirements.migration_effort;
+          const hours = typedResult.version_requirements.estimated_hours;
           addLog(` Migration: ${effort} effort${hours ? ` (${hours}h)` : ""}`);
         }
-        if (finalResult.recommendations?.consolidation_action) {
-          addLog(` Recommendation: ${finalResult.recommendations.consolidation_action}`);
+        if (typedResult.recommendations?.consolidation_action) {
+          addLog(` Recommendation: ${typedResult.recommendations.consolidation_action}`);
         }
 
         const duration = Date.now() - startTime;
-        addLog(`🎉 BladeLogic analysis completed in ${duration}ms`);
+        addLog(` BladeLogic analysis completed in ${duration}ms`);
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error("BladeLogic analysis error:", error);
         addLog(` BladeLogic analysis failed: ${errorMessage}`);
-        setAnalysisResult(null);
+        setAnalysisResult(undefined);
       } finally {
         setLoading(false);
       }

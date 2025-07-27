@@ -44,7 +44,7 @@ export default function GatedProgressSteps({
   };
 
   const getStepIcon = (stepIndex: number, status: string) => {
-    const icons = ['🔍', '📋', '⚙️', '', ''];
+    const icons = ['🔍', '', '⚙️', '', ''];
     
     if (status === 'completed') return '✓';
     if (status === 'locked') return '🔒';

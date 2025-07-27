@@ -41,7 +41,7 @@ const AdminNavigation: React.FC = () => {
           const params = new URLSearchParams(window.location.search);
           workflow = params.get('workflow') || 'x2ansible';
         }
-      } catch (e) {
+      } catch {
         workflow = 'x2ansible';
       }
     }

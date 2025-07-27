@@ -5,16 +5,17 @@
 import { BackendAnalysisResponse } from '../types/BackendTypes';
 
 // SAFE: Extract string from potentially nested object (for Salt compatibility)
-const safeStringExtract = (data: any): string => {
+const safeStringExtract = (data: unknown): string => {
   if (typeof data === 'string') return data;
   if (typeof data === 'object' && data !== null) {
+    const obj = data as Record<string, unknown>;
     // Try common text fields
-    if (data.description) return String(data.description);
-    if (data.summary) return String(data.summary);
-    if (data.text) return String(data.text);
-    if (data.rationale) return String(data.rationale);
+    if (obj.description) return String(obj.description);
+    if (obj.summary) return String(obj.summary);
+    if (obj.text) return String(obj.text);
+    if (obj.rationale) return String(obj.rationale);
     // If object has single string value, use it
-    const values = Object.values(data).filter(v => typeof v === 'string');
+    const values = Object.values(obj).filter(v => typeof v === 'string');
     if (values.length === 1) return values[0] as string;
     // Last resort: serialize safely
     return JSON.stringify(data, null, 2);
@@ -23,7 +24,7 @@ const safeStringExtract = (data: any): string => {
 };
 
 // Direct backend value access - no fallback generation
-export const getBackendValue = (data: any, fallback: string = 'Not specified'): string => {
+export const getBackendValue = (data: unknown, fallback: string = 'Not specified'): string => {
   if (data === undefined || data === null || data === '' || data === 'Unknown') {
     return fallback;
   }
@@ -32,18 +33,27 @@ export const getBackendValue = (data: any, fallback: string = 'Not specified'): 
 };
 
 // Check if backend actually provided meaningful data
-export const hasBackendData = (data: any): boolean => {
-  if (data === undefined || data === null || data === '' || data === 'Unknown') return false;
-  if (typeof data === 'object' && Object.keys(data).length === 0) return false;
+export const hasBackendData = (data: unknown): boolean => {
+  if (data === undefined || data === null || data === '') return false;
+  // Make case-insensitive check for unknown values
+  if (typeof data === 'string' && data.toLowerCase() === 'unknown') return false;
+  if (typeof data === 'object' && Object.keys(data as Record<string, unknown>).length === 0) return false;
   return true;
 };
 
-// SAFE: Get analysis content for display (handles both string and object fields)
+// SAFE: Get analysis content for display - UPDATED to handle Puppet with debugging
 export const getAnalysisContent = (result: BackendAnalysisResponse) => {
-  // Try detailed_analysis first (Chef/BladeLogic format)
+  console.log('🔍 getAnalysisContent called with result:', result);
+  console.log('🔍 result.detailed_analysis:', result?.detailed_analysis);
+  console.log('🔍 typeof result.detailed_analysis:', typeof result?.detailed_analysis);
+  console.log('🔍 hasBackendData(result?.detailed_analysis):', hasBackendData(result?.detailed_analysis));
+  
+  // Try detailed_analysis first (Chef/BladeLogic/Puppet format)
   if (hasBackendData(result?.detailed_analysis)) {
+    const content = safeStringExtract(result.detailed_analysis);
+    console.log(' Found detailed_analysis, extracted content:', content);
     return {
-      content: safeStringExtract(result.detailed_analysis),
+      content: content,
       type: 'Detailed Analysis',
       description: 'Information on the IaC analyzed'
     };
@@ -51,6 +61,7 @@ export const getAnalysisContent = (result: BackendAnalysisResponse) => {
   
   // Try description (Salt format)
   if (hasBackendData(result?.description)) {
+    console.log(' Found description:', result.description);
     return {
       content: safeStringExtract(result.description),
       type: 'Analysis Description', 
@@ -60,8 +71,9 @@ export const getAnalysisContent = (result: BackendAnalysisResponse) => {
   
   // Try primary purpose
   if (hasBackendData(result?.functionality?.primary_purpose)) {
+    console.log(' Found primary_purpose:', result.functionality!.primary_purpose);
     return {
-      content: safeStringExtract(result.functionality.primary_purpose),
+      content: safeStringExtract(result.functionality!.primary_purpose),
       type: 'Primary Purpose',
       description: 'What this automation accomplishes'
     };
@@ -81,6 +93,7 @@ export const getAnalysisContent = (result: BackendAnalysisResponse) => {
     }
     
     if (content) {
+      console.log(' Found recommendations content:', content);
       return {
         content,
         type: 'Analysis Rationale',
@@ -89,22 +102,78 @@ export const getAnalysisContent = (result: BackendAnalysisResponse) => {
     }
   }
   
+  // NEW: Try Puppet-specific analysis content
+  if (result?.object_type && result?.puppet_resources) {
+    const puppetInfo = result.puppet_resources;
+    const content = `Puppet ${result.object_type} analysis: ${puppetInfo.total_resources || 0} resources detected. ${puppetInfo.complexity_indicators?.length ? `Complexity indicators: ${puppetInfo.complexity_indicators.join(', ')}.` : ''}`;
+    console.log(' Found Puppet-specific content:', content);
+    return {
+      content,
+      type: 'Puppet Analysis',
+      description: 'Puppet manifest analysis results'
+    };
+  }
+  
+  console.log('❌ No analysis content found');
   return null;
 };
 
-// Agent information from backend
+// Agent information from backend - UPDATED to handle Puppet with nested session_info
 export const getAgentInfo = (result: BackendAnalysisResponse) => {
+  // Check for Puppet-specific data structure first (nested session_info)
+  if (result?.object_type || result?.object_name) {
+    return {
+      name: 'Puppet Analysis Agent',
+      icon: '🎭',
+      technology: 'puppet',
+      correlationId: result.session_info?.correlation_id,
+      sessionId: result.session_info?.session_id
+    };
+  }
+  
+  // Check for metadata-based agent info (existing Chef/BladeLogic/Salt format)
+  if (result?.metadata?.agent_name) {
+    return {
+      name: result.metadata.agent_name,
+      icon: result.metadata.agent_icon || '',
+      technology: result.metadata.technology_type || 'unknown',
+      correlationId: result.metadata.correlation_id,
+      sessionId: undefined // metadata doesn't have session_id
+    };
+  }
+  
+  // Check for top-level session_info (existing format)
+  if (result?.session_info?.session_id) {
+    return {
+      name: 'Analysis Agent',
+      icon: '🤖',
+      technology: 'unknown',
+      correlationId: result.session_info.correlation_id,
+      sessionId: result.session_info.session_id
+    };
+  }
+  
+  // Fallback for any other format
   return {
-    name: result.metadata?.agent_name || 'Analysis Agent',
-    icon: result.metadata?.agent_icon || '🔍',
-    technology: result.metadata?.technology_type || 'Unknown',
-    correlationId: result.metadata?.correlation_id,
-    sessionId: result.session_info?.session_id
+    name: 'Analysis Agent',
+    icon: '🤖',
+    technology: 'unknown',
+    correlationId: result?.metadata?.correlation_id || result?.session_info?.correlation_id,
+    sessionId: result?.session_info?.session_id
   };
 };
 
 // Analysis timing from backend
 export const getAnalysisTiming = (result: BackendAnalysisResponse) => {
+  // Check for Puppet's nested session_info first
+  if (result?.session_info?.analysis_time_seconds) {
+    const durationMs = result.session_info.analysis_time_seconds * 1000;
+    if (durationMs < 1000) return { display: `${Math.round(durationMs)}ms`, ms: durationMs };
+    if (durationMs < 60000) return { display: `${(durationMs / 1000).toFixed(1)}s`, ms: durationMs };
+    return { display: `${(durationMs / 60000).toFixed(1)}m`, ms: durationMs };
+  }
+  
+  // Existing logic for other technologies
   const durationMs = result.duration_ms || result.metadata?.analysis_duration_ms;
   
   if (!durationMs) return { display: 'Not tracked', ms: 0 };
@@ -128,8 +197,30 @@ export const getMigrationInfo = (result: BackendAnalysisResponse) => {
   return { effort, hours, display, color };
 };
 
-// Complexity from backend (prefer tree-sitter, fallback to LLM)
+// Complexity from backend - UPDATED to handle Puppet with proper colors
 export const getComplexityInfo = (result: BackendAnalysisResponse) => {
+  // Check for Puppet-specific complexity
+  if (result?.complexity_level) {
+    const level = result.complexity_level.toUpperCase();
+    let color = 'text-gray-400'; // default
+    
+    // Add proper color mapping for Puppet complexity
+    if (level === 'LOW') {
+      color = 'text-green-400';
+    } else if (level === 'MEDIUM') {
+      color = 'text-yellow-400';
+    } else if (level === 'HIGH') {
+      color = 'text-red-400';
+    }
+    
+    return { 
+      source: 'puppet', 
+      level: level, 
+      display: level,
+      color: color
+    };
+  }
+  
   const treeScore = result.tree_sitter_facts?.complexity_score;
   const llmLevel = result.complexity_level;
   
@@ -164,7 +255,7 @@ export const getRiskInfo = (result: BackendAnalysisResponse) => {
 };
 
 // SAFE: Format arrays for display (handles objects that might contain arrays)
-export const formatArray = (arr: string[] | any | undefined, limit: number = 3): string => {
+export const formatArray = (arr: string[] | unknown | undefined, limit: number = 3): string => {
   // Handle array input
   if (Array.isArray(arr)) {
     if (arr.length === 0) return 'None';
@@ -174,12 +265,13 @@ export const formatArray = (arr: string[] | any | undefined, limit: number = 3):
   
   // Handle object that might contain arrays
   if (typeof arr === 'object' && arr !== null) {
-    const arrayValues = Object.values(arr).filter(v => Array.isArray(v));
+    const obj = arr as Record<string, unknown>;
+    const arrayValues = Object.values(obj).filter(v => Array.isArray(v));
     if (arrayValues.length > 0) {
       return formatArray(arrayValues[0] as string[], limit);
     }
     // Convert object keys to comma-separated string
-    const keys = Object.keys(arr);
+    const keys = Object.keys(obj);
     if (keys.length === 0) return 'None';
     if (keys.length <= limit) return keys.join(', ');
     return `${keys.slice(0, limit).join(', ')} (+${keys.length - limit} more)`;
@@ -192,20 +284,30 @@ export const formatArray = (arr: string[] | any | undefined, limit: number = 3):
 };
 
 // Version requirements (SAFE: supports both Chef and Salt versions)
-export const getVersionRequirements = (result: BackendAnalysisResponse) => {
+export const getVersionRequirements = (result: BackendAnalysisResponse): {
+  chef: string;
+  ruby: string;
+  salt: string;
+  ansible: string;
+  puppet: string;
+  effort?: string;
+  hours?: number;
+  deprecated: string[];
+} | null => {
   const vr = result.version_requirements;
   if (!vr) return null;
   
   return {
     chef: getBackendValue(vr.min_chef_version),
     ruby: getBackendValue(vr.min_ruby_version),
-    salt: getBackendValue((vr as any).min_salt_version), // Salt support
+    salt: getBackendValue((vr as Record<string, unknown>).min_salt_version), // Salt support
+    ansible: getBackendValue(vr.min_ansible_version), // Add missing ansible support
+    puppet: getBackendValue(vr.min_puppet_version), // Add Puppet support
     effort: vr.migration_effort,
     hours: vr.estimated_hours,
     deprecated: vr.deprecated_features || []
   };
 };
-
 
 // SAFE: Extract key operations (handles both array and object formats)
 export const getKeyOperations = (result: BackendAnalysisResponse): string[] => {
@@ -215,29 +317,30 @@ export const getKeyOperations = (result: BackendAnalysisResponse): string[] => {
   }
   
   // Salt might use state_module_usage
-  if ((result as any).state_module_usage) {
-    const stateUsage = (result as any).state_module_usage;
-    if (Array.isArray(stateUsage)) return stateUsage;
-    if (typeof stateUsage === 'object') return Object.keys(stateUsage);
+  if ((result as Record<string, unknown>).state_module_usage) {
+    const stateUsage = (result as Record<string, unknown>).state_module_usage;
+    if (Array.isArray(stateUsage)) return stateUsage as string[];
+    if (typeof stateUsage === 'object') return Object.keys(stateUsage as Record<string, unknown>) as string[];
   }
   
   return [];
 };
 
 // SAFE: Extract upgrade info (for Ansible upgrade analysis and similar workflows)
-export function getUpgradeInfo(result: any) {
+export function getUpgradeInfo(result: BackendAnalysisResponse) {
   // Defensive: Only return info if present and well-formed, otherwise return default shape
   if (
     result &&
-    result.upgrade &&
-    typeof result.upgrade === 'object'
+    (result as Record<string, unknown>).upgrade &&
+    typeof (result as Record<string, unknown>).upgrade === 'object'
   ) {
+    const upgrade = (result as Record<string, unknown>).upgrade as Record<string, unknown>;
     return {
       hasUpgradeData: true,
-      breakingChangesCount: result.upgrade.breakingChangesCount ?? 0,
-      currentVersion: result.upgrade.currentVersion ?? 'Not specified',
-      recommendedVersion: result.upgrade.recommendedVersion ?? 'Not specified',
-      ...result.upgrade,
+      breakingChangesCount: upgrade.breakingChangesCount ?? 0,
+      currentVersion: upgrade.currentVersion ?? 'Not specified',
+      recommendedVersion: upgrade.recommendedVersion ?? 'Not specified',
+      ...upgrade,
     };
   }
   // No upgrade info found, return a default
@@ -248,17 +351,33 @@ export function getUpgradeInfo(result: any) {
     recommendedVersion: 'Not specified',
   };
 }
-// --- SMART: Non-hardcoded status extraction for any workflow/tech type ---
-export function getAnalysisStatus(result: any) {
-  // Prefer explicit upgrade info if present
-  if (result && result.upgrade && typeof result.upgrade === 'object') {
-    if ('breakingChangesCount' in result.upgrade) {
-      return result.upgrade.breakingChangesCount > 0 ? 'Upgrade Needed' : 'Up to Date';
-    }
-    if ('upgradeRequired' in result.upgrade) {
-      return result.upgrade.upgradeRequired ? 'Upgrade Needed' : 'Up to Date';
+
+// Analysis status - UPDATED to handle Puppet with better status
+export function getAnalysisStatus(result: BackendAnalysisResponse) {
+  // Puppet-specific status based on complexity and object type
+  if (result?.object_type && result?.complexity_level) {
+    const complexity = result.complexity_level.toUpperCase();
+    
+    if (complexity === 'LOW') {
+      return 'Ready for Conversion';
+    } else if (complexity === 'MEDIUM') {
+      return 'Review Recommended';
+    } else if (complexity === 'HIGH') {
+      return 'Complex - Manual Review';
     }
   }
+  
+  // Prefer explicit upgrade info if present
+  if (result && (result as Record<string, unknown>).upgrade && typeof (result as Record<string, unknown>).upgrade === 'object') {
+    const upgrade = (result as Record<string, unknown>).upgrade as Record<string, unknown>;
+    if ('breakingChangesCount' in upgrade) {
+      return (upgrade.breakingChangesCount as number) > 0 ? 'Upgrade Needed' : 'Up to Date';
+    }
+    if ('upgradeRequired' in upgrade) {
+      return upgrade.upgradeRequired ? 'Upgrade Needed' : 'Up to Date';
+    }
+  }
+  
   // Try recommendations
   const priority = result?.recommendations?.upgrade_priority || result?.recommendations?.priority;
   if (priority) {
@@ -266,9 +385,20 @@ export function getAnalysisStatus(result: any) {
     if (String(priority).toUpperCase() === 'LOW') return 'Up to Date';
     if (String(priority).toUpperCase() === 'MEDIUM') return 'Possible Upgrade';
   }
+  
+  // NEW: Only add Chef logic if we detect Chef analysis
+  if (result?.version_requirements?.migration_effort && 
+      (result?.metadata?.technology_type === 'chef' || result?.functionality)) {
+    const effort = String(result.version_requirements.migration_effort).toUpperCase();
+    if (effort === 'LOW') return 'Up to Date';
+    if (effort === 'MEDIUM') return 'Possible Upgrade';
+    if (effort === 'HIGH') return 'Upgrade Needed';
+  }
+  
   // Complexity clues
   if (result?.complexity_assessment?.estimated_effort_hours === 0) return 'Up to Date';
   if (result?.complexity_assessment?.level && String(result.complexity_assessment.level).toUpperCase() === 'LOW') return 'Up to Date';
+  
   // Fallback
-  return 'Unknown';
+  return 'Analysis Complete';
 }

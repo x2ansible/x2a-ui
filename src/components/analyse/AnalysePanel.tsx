@@ -16,7 +16,6 @@ import {
   getAnalysisTiming, 
   getMigrationInfo, 
   getComplexityInfo, 
-  hasBackendData,
   getUpgradeInfo,
   getAnalysisStatus
 } from './utils/backendUtils';
@@ -28,22 +27,22 @@ import { EnhancedAnalysisLoading } from '../EnhancedAnalysisLoading';
 
 // SAFE: Sanitize result object to prevent React rendering errors
 const sanitizeResult = (result: BackendAnalysisResponse): BackendAnalysisResponse => {
-  const sanitizeValue = (value: any): any => {
+  const sanitizeValue = (value: unknown): unknown => {
     if (value === null || value === undefined) return value;
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
     if (Array.isArray(value)) return value.map(sanitizeValue);
     
     if (typeof value === 'object') {
       // Convert problematic objects to safe strings
-      const keys = Object.keys(value);
+      const keys = Object.keys(value as Record<string, unknown>);
       if (keys.includes('description') && keys.includes('configuration_complexity')) {
         // This is a Salt response object - convert to string
-        return value.description || JSON.stringify(value, null, 2);
+        return (value as Record<string, unknown>).description || JSON.stringify(value, null, 2);
       }
       
       // Recursively sanitize regular objects
-      const sanitized: any = {};
-      for (const [key, val] of Object.entries(value)) {
+      const sanitized: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
         sanitized[key] = sanitizeValue(val);
       }
       return sanitized;
@@ -77,9 +76,10 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
     }
     
     // Fallback detection from result structure
-    const anyResult = result as any;
+    const anyResult = result as Record<string, unknown>;
     if (anyResult?.managed_services || anyResult?.object_type) return 'salt';
     if (anyResult?.current_state || anyResult?.upgrade_requirements) return 'ansible-upgrade';
+    if (result?.object_type || result?.object_name || result?.puppet_resources) return 'puppet';
     if (result?.functionality || result?.tree_sitter_facts) return 'chef';
     
     return 'chef'; // default
@@ -164,7 +164,7 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
           </div>
           <h2 className="text-xl font-bold text-red-300 mb-3">Analysis Failed</h2>
           <p className="text-sm text-gray-400 leading-relaxed mb-4">
-            {result.error || 'Backend analysis was not successful'}
+            {typeof result.error === 'string' ? result.error : 'Backend analysis was not successful'}
           </p>
           <div className="bg-red-900/20 rounded-lg p-4 border border-red-500/30">
             <p className="text-xs text-red-300 text-left">
@@ -264,7 +264,6 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
               {statusText === 'Upgrade Needed' && <RefreshCw size={12} />}
               {statusText === 'Up to Date' && <CheckCircle size={12} />}
               {statusText === 'Possible Upgrade' && <AlertTriangle size={12} />}
-              {statusText === 'Unknown' && <AlertTriangle size={12} />}
               {statusText}
             </div>
             <div className="text-xs text-gray-500 mt-1">Status</div>
@@ -274,18 +273,20 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
           {agentInfo.technology === 'ansible-upgrade' && upgradeInfo?.hasUpgradeData ? (
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${
-                upgradeInfo.breakingChangesCount > 0 ? 'text-red-400 bg-red-900/30 border-red-500/30' : 'text-green-400 bg-green-900/30 border-green-500/30'
+                (typeof upgradeInfo.breakingChangesCount === 'number' && upgradeInfo.breakingChangesCount > 0) 
+                  ? 'text-red-400 bg-red-900/30 border-red-500/30' 
+                  : 'text-green-400 bg-green-900/30 border-green-500/30'
               }`}>
-                <span>{upgradeInfo.breakingChangesCount > 0 ? '⚠️' : '✅'}</span>
-                <span>{upgradeInfo.breakingChangesCount} Breaking</span>
+                <span>{(typeof upgradeInfo.breakingChangesCount === 'number' && upgradeInfo.breakingChangesCount > 0) ? '⚠️' : ''}</span>
+                <span>{typeof upgradeInfo.breakingChangesCount === 'number' ? upgradeInfo.breakingChangesCount : 0} Breaking</span>
               </div>
               <div className="text-xs text-gray-500 mt-1">Changes</div>
             </div>
           ) : complexityInfo ? (
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${
-                complexityInfo.level === 'HIGH' ? 'text-red-400 bg-red-900/30 border-red-500/30' :
-                complexityInfo.level === 'MEDIUM' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-500/30' :
+                complexityInfo.color === 'text-red-400' ? 'text-red-400 bg-red-900/30 border-red-500/30' :
+                complexityInfo.color === 'text-yellow-400' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-500/30' :
                 'text-green-400 bg-green-900/30 border-green-500/30'
               }`}>
                 <span>{complexityInfo.level === 'HIGH' ? '🔴' : complexityInfo.level === 'MEDIUM' ? '🟡' : '🟢'}</span>
@@ -299,8 +300,10 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
           {agentInfo.technology === 'ansible-upgrade' && upgradeInfo?.hasUpgradeData && upgradeInfo.currentVersion !== 'Not specified' ? (
             <div className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
               <div className="text-xs font-medium text-blue-400">
-                {upgradeInfo.currentVersion}
-                {upgradeInfo.recommendedVersion !== 'Not specified' && upgradeInfo.recommendedVersion !== upgradeInfo.currentVersion && (
+                {typeof upgradeInfo.currentVersion === 'string' ? upgradeInfo.currentVersion : 'Not specified'}
+                {typeof upgradeInfo.recommendedVersion === 'string' && 
+                 upgradeInfo.recommendedVersion !== 'Not specified' && 
+                 upgradeInfo.recommendedVersion !== upgradeInfo.currentVersion && (
                   <span className="text-gray-500"> → {upgradeInfo.recommendedVersion}</span>
                 )}
               </div>

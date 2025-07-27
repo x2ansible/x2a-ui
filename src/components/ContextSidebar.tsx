@@ -12,23 +12,31 @@ import {
 interface ContextSidebarProps {
   vectorDbId: string;
   contextConfig?: {
-    includeComments?: boolean;
-    analyzeDependencies?: boolean;
-    environmentType?: 'development' | 'staging' | 'production';
-    scanDepth?: 'shallow' | 'medium' | 'deep';
+    includeComments: boolean;
+    analyzeDependencies: boolean;
+    environmentType: 'development' | 'staging' | 'production';
+    scanDepth: 'shallow' | 'medium' | 'deep';
   };
-  setContextConfig?: (config: unknown) => void;
+  setContextConfig?: React.Dispatch<React.SetStateAction<{
+    includeComments: boolean;
+    analyzeDependencies: boolean;
+    environmentType: 'development' | 'staging' | 'production';
+    scanDepth: 'shallow' | 'medium' | 'deep';
+  }>>;
   onDocUploaded?: () => void;
+  onDatabaseChange?: (dbId: string) => void; // NEW: Add this prop
 }
 
 export default function ContextSidebar({ 
   vectorDbId, 
   contextConfig, 
   setContextConfig, 
-  onDocUploaded 
+  onDocUploaded,
+  onDatabaseChange // NEW: Add this prop
 }: ContextSidebarProps) {
-  const [vectorDbs, setVectorDbs] = useState<any[]>([]);
-  const [currentVectorDb, setCurrentVectorDb] = useState<any>(null);
+  const [vectorDbs, setVectorDbs] = useState<Record<string, unknown>[]>([]);
+  const [currentVectorDb, setCurrentVectorDb] = useState<Record<string, unknown> | null>(null);
+  const [selectedDbId, setSelectedDbId] = useState<string>(vectorDbId);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +50,6 @@ export default function ContextSidebar({
       setLoading(true);
       setError(null);
       try {
-        // Use the correct endpoint with environment variable
         const apiUrl = process.env.NEXT_PUBLIC_VECTOR_DB_LIST_API || "/api/vector-db/list";
         console.log("🔗 Fetching vector DBs from:", apiUrl);
         
@@ -53,20 +60,59 @@ export default function ContextSidebar({
         const data = await response.json();
         console.log("📊 Vector DBs received:", data);
         
-        setVectorDbs(Array.isArray(data) ? data : []);
+        const dbArray = Array.isArray(data) ? data : [];
+        setVectorDbs(dbArray);
         
-        const currentDb = Array.isArray(data) 
-          ? data.find((db: unknown) => 
-              db.identifier === vectorDbId || 
-              db.provider_resource_id === vectorDbId ||
-              db.vector_db_id === vectorDbId
-            ) 
-          : null;
-        setCurrentVectorDb(currentDb);
-        console.log("🎯 Current DB found:", currentDb);
+        // Smart default selection
+        let defaultDbId = vectorDbId;
+        
+        // Try to find the requested database
+        const requestedDb = dbArray.find((db: Record<string, unknown>) => 
+          (db.identifier as string) === vectorDbId || 
+          (db.provider_resource_id as string) === vectorDbId ||
+          (db.vector_db_id as string) === vectorDbId
+        );
+        
+        if (!requestedDb && dbArray.length > 0) {
+          // Find default database or use first available
+          const defaultDb = dbArray.find((db: Record<string, unknown>) => 
+            (db.is_default as boolean) === true || 
+            (db.default as boolean) === true ||
+            (db.active as boolean) === true ||
+            (db.identifier as string) === 'iac'
+          ) || dbArray[0];
+          
+          defaultDbId = (defaultDb.identifier as string) || (defaultDb.vector_db_id as string) || (defaultDb.provider_resource_id as string);
+        }
+        
+        setSelectedDbId(defaultDbId);
+        
+        // Find and set current database
+        const currentDb = dbArray.find((db: Record<string, unknown>) => 
+          (db.identifier as string) === defaultDbId || 
+          (db.provider_resource_id as string) === defaultDbId ||
+          (db.vector_db_id as string) === defaultDbId
+        );
+        
+        setCurrentVectorDb(currentDb || null);
+        console.log("🎯 Selected DB:", currentDb);
+        
       } catch (err) {
         console.error("Failed to fetch vector DBs:", err);
         setError(err instanceof Error ? err.message : "Failed to fetch knowledge base");
+        
+        // Fallback: Set a default database when API fails
+        const fallbackDb = {
+          identifier: vectorDbId,
+          embedding_model: 'Unknown',
+          embedding_dimension: 'Unknown',
+          provider_id: 'Unknown'
+        };
+        setCurrentVectorDb(fallbackDb);
+        setSelectedDbId(vectorDbId);
+        
+        // Also set a fallback for the dropdown
+        setVectorDbs([fallbackDb]);
       } finally {
         setLoading(false);
       }
@@ -161,6 +207,29 @@ export default function ContextSidebar({
     }
   };
 
+  // Handle database selection change
+  const handleDbChange = (newDbId: string) => {
+    setSelectedDbId(newDbId);
+    const newDb = vectorDbs.find((db: Record<string, unknown>) => 
+      (db.identifier as string) === newDbId || 
+      (db.provider_resource_id as string) === newDbId ||
+      (db.vector_db_id as string) === newDbId
+    );
+    setCurrentVectorDb(newDb || null);
+    
+    // NEW: Notify parent of database change
+    if (onDatabaseChange) {
+      onDatabaseChange(newDbId);
+    }
+  };
+
+  // Also notify parent when the initial database is set
+  useEffect(() => {
+    if (selectedDbId && onDatabaseChange) {
+      onDatabaseChange(selectedDbId);
+    }
+  }, [selectedDbId, onDatabaseChange]);
+
   return (
     <div className="h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-r border-slate-600/30">
       <div className="p-6 space-y-6 h-full overflow-y-auto context-sidebar-scrollbar">
@@ -176,6 +245,28 @@ export default function ContextSidebar({
             </div>
           </div>
         </div>
+
+        {/* Knowledge Base Selector */}
+        {vectorDbs.length > 0 && (
+          <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
+            <div className="flex items-center space-x-2 mb-3">
+              <CircleStackIcon className="w-4 h-4 text-slate-400" />
+              <h4 className="font-semibold text-slate-200 text-sm">Select Knowledge Base</h4>
+            </div>
+            
+            <select
+              value={selectedDbId}
+              onChange={(e) => handleDbChange(e.target.value)}
+              className="w-full p-2 text-xs rounded-lg border border-slate-600/50 bg-slate-700/50 text-slate-200 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/25 transition-colors"
+            >
+              {vectorDbs.map((db) => (
+                <option key={db.identifier as string} value={db.identifier as string}>
+                  {db.identifier as string} {(db.is_default as boolean) ? '(Default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Vector Database Status */}
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-700/30 rounded-xl border border-slate-600/30 p-4">
@@ -194,20 +285,20 @@ export default function ContextSidebar({
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">ID:</span>
                 <span className="text-xs text-slate-200 font-mono bg-slate-700/50 px-2 py-1 rounded">
-                  {currentVectorDb.identifier || vectorDbId}
+                  {(currentVectorDb.identifier as string) || selectedDbId}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Model:</span>
-                <span className="text-xs text-blue-300">{currentVectorDb.embedding_model}</span>
+                <span className="text-xs text-blue-300">{currentVectorDb.embedding_model as string}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Dimensions:</span>
-                <span className="text-xs text-cyan-300">{currentVectorDb.embedding_dimension}</span>
+                <span className="text-xs text-cyan-300">{currentVectorDb.embedding_dimension as string}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Provider:</span>
-                <span className="text-xs text-green-300">{currentVectorDb.provider_id}</span>
+                <span className="text-xs text-green-300">{currentVectorDb.provider_id as string}</span>
               </div>
             </div>
           ) : (
@@ -406,12 +497,12 @@ export default function ContextSidebar({
                 {vectorDbs.slice(0, 3).map((db, i) => (
                   <div key={i} className="flex items-center space-x-2 text-xs">
                     <div className={`w-2 h-2 rounded-full ${
-                      db.identifier === vectorDbId ? 'bg-green-400' : 'bg-slate-500'
+                      db.identifier === selectedDbId ? 'bg-green-400' : 'bg-slate-500'
                     }`}></div>
                     <span className={`font-mono truncate ${
-                      db.identifier === vectorDbId ? 'text-green-300' : 'text-slate-400'
+                      db.identifier === selectedDbId ? 'text-green-300' : 'text-slate-400'
                     }`}>
-                      {db.identifier}
+                      {db.identifier as string}
                     </span>
                   </div>
                 ))}

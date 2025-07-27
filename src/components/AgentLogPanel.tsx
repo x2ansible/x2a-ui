@@ -2,9 +2,6 @@ import React, { useEffect, useRef } from 'react';
 import { 
   ClockIcon, 
   TrashIcon, 
-  CheckCircleIcon, 
-  ExclamationCircleIcon,
-  InformationCircleIcon,
   MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 

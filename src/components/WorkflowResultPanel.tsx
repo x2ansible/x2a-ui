@@ -49,7 +49,7 @@ interface WorkflowResultPanelProps {
 
 const stepConfig = {
   0: { title: "Classification Result", icon: "🔍", color: "blue" },
-  1: { title: "Context Analysis", icon: "📋", color: "purple" },
+  1: { title: "Context Analysis", icon: "", color: "purple" },
   2: { title: "Conversion Result", icon: "⚙️", color: "orange" },
   3: { title: "Validation Report", icon: "", color: "green" },
   4: { title: "Deployment Status", icon: "", color: "red" }
@@ -83,7 +83,7 @@ export default function WorkflowResultPanel({
         if (result.context) {
           display += `📦 Dependencies: ${result.context.dependencies.join(', ')}\n`;
           display += `🌍 Environment: ${result.context.environment}\n`;
-          display += `📋 Requirements:\n`;
+          display += ` Requirements:\n`;
           result.context.requirements.forEach(req => display += `  • ${req}\n`);
           display += `💡 Recommendations:\n`;
           result.context.recommendations.forEach(rec => display += `  • ${rec}\n`);

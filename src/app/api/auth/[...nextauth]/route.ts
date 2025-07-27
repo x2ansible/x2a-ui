@@ -9,7 +9,7 @@ const ALLOWED_GITHUB_USERS =
     .map((u) => u.trim().toLowerCase())
     .filter(Boolean);
 
-export const authOptions: NextAuthOptions = {
+const authOptions: NextAuthOptions = {
   providers: [
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID!,
@@ -18,10 +18,10 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, profile }) {
       // Get GitHub username from profile (always lowercase!)
       const username =
-        (profile as any)?.login?.toLowerCase() ||
+        ((profile as Record<string, unknown>)?.login as string)?.toLowerCase() ||
         user.name?.toLowerCase() ||
         (user.email ? user.email.split("@")[0].toLowerCase() : "");
       
@@ -42,9 +42,9 @@ export const authOptions: NextAuthOptions = {
       console.log(`[AUTH] Username "${username}" is ${allowed ? "ALLOWED" : "DENIED"}`);
       return allowed;
     },
-    async session({ session, token }) {
+    async session({ session }) {
       // Optionally: Mark isAdmin only for allowed users
-      session.isAdmin =
+      (session as unknown as Record<string, unknown>).isAdmin =
         session?.user?.name &&
         ALLOWED_GITHUB_USERS.includes(session.user.name.toLowerCase());
       return session;

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 // Dynamically import SyntaxHighlighter to avoid SSR issues
 const SyntaxHighlighter = dynamic(
-  () => import("react-syntax-highlighter").then((mod) => mod.Prism),
+  () => import("react-syntax-highlighter").then((mod) => mod.Prism as any),
   { 
     ssr: false,
     loading: () => (
@@ -36,6 +36,7 @@ interface ContextPanelProps {
   analysisFiles?: Record<string, string>; // NEW: All analyzed files for context
   onLogMessage?: (msg: string) => void;
   onContextRetrieved?: (context: string) => void;
+  vectorDbId?: string;
 }
 
 interface ContextItem {
@@ -55,6 +56,8 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
   analysisFiles = {}, // NEW: Default to empty object
   onLogMessage,
   onContextRetrieved,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  vectorDbId,
 }) => {
   const [result, setResult] = useState<ContextResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -137,7 +140,11 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
   const toggleChunkExpansion = (index: number) => {
     setExpandedChunks((prev) => {
       const copy = new Set(prev);
-      copy.has(index) ? copy.delete(index) : copy.add(index);
+      if (copy.has(index)) {
+        copy.delete(index);
+      } else {
+        copy.add(index);
+      }
       return copy;
     });
   };
@@ -193,8 +200,8 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
 
     const startTime = Date.now();
     try {
-      // Use the streaming endpoint
-      const apiUrl = process.env.NEXT_PUBLIC_CONTEXT_QUERY_API || "http://localhost:8000/api/context/query/stream";
+      // FIXED: Use Next.js API route instead of direct backend call
+      const apiUrl = "/api/context/query/stream";
       
       logMessage(`🔗 Connecting to: ${apiUrl}`);
       
@@ -256,7 +263,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
 
       const decoder = new TextDecoder();
       let buffer = "";
-      let finalResult: unknown = null;
+      let finalResult: ContextResult | null = null;
       let contextItems: ContextItem[] = [];
 
       while (true) {
@@ -338,7 +345,7 @@ const ContextPanel: React.FC<ContextPanelProps> = ({
       }
     } catch (err: unknown) {
       const duration = Date.now() - startTime;
-      const errorMessage = err?.message || "Unknown error in context discovery";
+      const errorMessage = err instanceof Error ? err.message : "Unknown error in context discovery";
       setError(errorMessage);
       logMessage(`❌ Context discovery failed after ${duration}ms: ${errorMessage}`);
     } finally {

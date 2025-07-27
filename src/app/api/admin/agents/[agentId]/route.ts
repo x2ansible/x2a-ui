@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = "http://127.0.0.1:8000";
+// Environment-aware backend URL with local fallback
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
-export async function GET(request: NextRequest, { params }: { params: { agentId: string } }) {
-  const { agentId } = params;
+export async function GET(request: NextRequest, { params }: { params: Promise<{ agentId: string }> }) {
+  const { agentId } = await params;
 
   try {
     const response = await fetch(BACKEND_URL + "/api/admin/agents/" + agentId + "/instructions");
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: { agentId:
       return NextResponse.json(data);
     }
     throw new Error("Agent not found");
-  } catch (error) {
+  } catch {
     return NextResponse.json({ 
       error: "Failed to fetch agent",
       name: agentId,
@@ -22,8 +23,8 @@ export async function GET(request: NextRequest, { params }: { params: { agentId:
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { agentId: string } }) {
-  const { agentId } = params;
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ agentId: string }> }) {
+  const { agentId } = await params;
 
   try {
     const response = await fetch(BACKEND_URL + "/api/admin/agents/" + agentId, {
@@ -34,7 +35,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { agent
       return NextResponse.json({ success: true, ...data });
     }
     throw new Error("Failed to delete agent");
-  } catch (error) {
+  } catch {
     return NextResponse.json({ 
       error: "Failed to delete agent"
     }, { status: 500 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(" Backend streaming error:", errorText);
+        console.error("❌ Backend streaming error:", errorText);
         
         // Try fallback to regular validation endpoint
         return await tryRegularValidation(playbook_content, profile);
@@ -58,14 +58,14 @@ export async function POST(request: NextRequest) {
       if (contentType?.includes("text/event-stream")) {
         console.log("📊 Handling streaming response...");
 
+        if (!response.body) {
+          throw new Error("No response body for streaming");
+        }
+
         const stream = new ReadableStream({
           start(controller) {
-            const reader = response.body?.getReader();
-            if (!reader) {
-              controller.close();
-              return;
-            }
-
+            const reader = response.body!.getReader(); // Assert non-null since we checked above
+            
             function pump(): unknown {
               return reader.read().then(({ done, value }) => {
                 if (done) {
@@ -109,14 +109,14 @@ export async function POST(request: NextRequest) {
       }
 
     } catch (streamError) {
-      console.error(" Streaming endpoint failed:", streamError);
+      console.error("❌ Streaming endpoint failed:", streamError);
       
       // Fallback to regular validation endpoint
       return await tryRegularValidation(playbook_content, profile);
     }
 
   } catch (error) {
-    console.error(" Validation proxy error:", error);
+    console.error("❌ Validation proxy error:", error);
     return NextResponse.json(
       {
         error: "Validation service unavailable",
@@ -154,7 +154,7 @@ async function tryRegularValidation(playbook_content: string, profile: string) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(" Regular validation error:", errorText);
+      console.error("❌ Regular validation error:", errorText);
       
       // Return a structured error response
       return NextResponse.json({
@@ -176,7 +176,7 @@ async function tryRegularValidation(playbook_content: string, profile: string) {
     return NextResponse.json(data);
 
   } catch (regularError) {
-    console.error(" Regular validation also failed:", regularError);
+    console.error("❌ Regular validation also failed:", regularError);
     
     // Return a mock failed validation result
     return NextResponse.json({
@@ -195,7 +195,7 @@ async function tryRegularValidation(playbook_content: string, profile: string) {
 }
 
 // Handle OPTIONS requests for CORS
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {

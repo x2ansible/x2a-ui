@@ -5,13 +5,12 @@ interface WorkflowNavigationProps {
   currentStep: number;
   isStepCompleted: (step: number) => boolean;
   onGoToStep: (step: number) => void;
-  canProceedToNext: boolean;
   loading: boolean;
 }
 
 const steps = [
   { index: 0, name: "Classify", icon: "🔍" },
-  { index: 1, name: "Context", icon: "📋" },
+  { index: 1, name: "Context", icon: "" },
   { index: 2, name: "Convert", icon: "⚙️" },
   { index: 3, name: "Validate", icon: "" },
   { index: 4, name: "Deploy", icon: "" }
@@ -21,7 +20,6 @@ export default function WorkflowNavigation({
   currentStep,
   isStepCompleted,
   onGoToStep,
-  canProceedToNext,
   loading
 }: WorkflowNavigationProps) {
   return (
