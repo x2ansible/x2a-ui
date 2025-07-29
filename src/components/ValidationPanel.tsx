@@ -35,6 +35,64 @@ interface ValidationStep {
   timestamp?: number;
 }
 
+// New types for single-result format
+interface LintIssue {
+  // Legacy format (detailed rule-based issues)
+  rule?: string;
+  description?: string;
+  filename?: string;
+  line?: number;
+  severity?: 'error' | 'warning';
+  raw?: {
+    ruleId: string;
+    level: string;
+    message: { text: string };
+    locations: Array<{
+      physicalLocation: {
+        artifactLocation: { uri: string; uriBaseId: string };
+        region: { startLine: number; startColumn?: number };
+      };
+    }>;
+  };
+  // New format (general issues)
+  type?: string;
+  message?: string;
+}
+
+interface LintRecommendation {
+  issue: string;
+  recommendation: string;
+}
+
+interface LintSummary {
+  passed: boolean;
+  violations: number;
+  warnings: number;
+  total_issues: number;
+}
+
+interface SingleLintResult {
+  validation_passed: boolean;
+  exit_code: number;
+  message: string;
+  summary: LintSummary;
+  issues: LintIssue[];
+  recommendations: LintRecommendation[];
+  agent_analysis: string;
+  raw_output?: {
+    cmd?: string;
+    stdout?: string;
+    stderr?: string;
+  };
+  playbook_length: number;
+  profile: string;
+  debug_info: Record<string, unknown>;
+  session_info: Record<string, unknown>;
+  elapsed_time: number;
+}
+
+
+
 interface StreamingValidationResult {
   passed: boolean;
   final_code: string;
@@ -64,8 +122,12 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
   // validationConfig, // Removed as it's assigned but never used
   onLogMessage,
   onValidationComplete,
-  selectedProfile = 'production'
+  selectedProfile = 'basic'
 }) => {
+  // Debug logging for props
+  console.log("[ValidationPanel] Props received:", { selectedProfile, playbookLength: playbook?.length });
+  console.log("[ValidationPanel] selectedProfile value:", selectedProfile);
+  console.log("[ValidationPanel] selectedProfile type:", typeof selectedProfile);
   // Enhanced state for streaming validation
   const [result, setResult] = useState<StreamingValidationResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -141,32 +203,42 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Add timeout
+    // Add timeout - increased for complex validations
     const timeoutId = setTimeout(() => {
       abortController.abort();
-      setError("Validation timed out after 2 minutes");
+      setError("Validation timed out after 10 minutes");
       setLoading(false);
       setStreamingActive(false);
       setProgress(null);
       logMessage("⏱️ Validation timed out");
-    }, 120000);
+    }, 600000); // 10 minutes for complex LLM-driven validations
 
     try {
       logMessage(`🚀 Starting enhanced validation with ${selectedProfile} profile...`);
+      logMessage(`🔍 Debug: selectedProfile prop = "${selectedProfile}"`);
+      console.log("[ValidationPanel] Starting validation with profile:", selectedProfile);
+      console.log("[ValidationPanel] selectedProfile type:", typeof selectedProfile);
+      console.log("[ValidationPanel] selectedProfile === 'basic':", selectedProfile === 'basic');
       setProgress("Connecting to validation service...");
       
       const cleanedPlaybook = playbook.trim();
+      
+      const requestBody = {
+        playbook_content: cleanedPlaybook,
+        profile: selectedProfile,
+      };
+      
+      logMessage(`🔍 Debug: Request body = ${JSON.stringify(requestBody, null, 2)}`);
+      console.log("[ValidationPanel] Request body being sent:", requestBody);
+      console.log("[ValidationPanel] selectedProfile in request:", selectedProfile);
       
       const response = await fetch("/api/validate/playbook/stream", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Accept": "text/event-stream, application/json",
+          "Accept": "text/event-stream",
         },
-        body: JSON.stringify({
-          playbook_content: cleanedPlaybook,
-          profile: selectedProfile,
-        }),
+        body: JSON.stringify(requestBody),
         signal: abortController.signal,
       });
 
@@ -244,7 +316,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
                 data = JSON.parse(trimmedLine);
               }
 
-              // Handle progress messages
+              // Handle progress messages (legacy format)
               if (data.type === "progress") {
                 const step: ValidationStep = {
                   step: data.step || collectedSteps.length + 1,
@@ -263,6 +335,20 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
                 setProgress(`${action} Step ${step.step}...`);
                 logMessage(`${action} Step ${step.step}: ${step.message || 'Processing'}`);
               } 
+              // Handle new single-result format
+              else if (data.type === "result" && data.data) {
+                logMessage("📊 Received single validation result");
+                const singleResult = data.data as SingleLintResult;
+                finalResult = transformSingleResultToStreamingFormat(singleResult, cleanedPlaybook);
+                // Don't break here - wait for the "end" signal
+                logMessage("📊 Waiting for end signal...");
+              }
+              // Handle end signal
+              else if (data.type === "end") {
+                logMessage("📊 Received end signal");
+                streamComplete = true;
+                break;
+              }
               else if (data.type === "final_result" && data.data) {
                 logMessage("📊 Received final result");
                 finalResult = data.data;
@@ -344,6 +430,101 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     }
   }, [playbook, selectedProfile, logMessage]);
 
+  // Helper function to transform single-result format to streaming format
+  const transformSingleResultToStreamingFormat = (singleResult: SingleLintResult, originalCode: string): StreamingValidationResult => {
+    const duration = startTimeRef.current ? Date.now() - startTimeRef.current : undefined;
+    
+    // Convert each lint issue to a step for UI consistency
+    const steps: ValidationStep[] = singleResult.issues.map((issue, index) => {
+      // Handle both legacy and new issue formats
+      let summary: string;
+      let message: string;
+      
+      if (issue.rule && issue.description) {
+        // Legacy format: rule-based issues
+        summary = `${issue.rule}: ${issue.description}`;
+        message = issue.line ? `Line ${issue.line}: ${issue.description}` : issue.description;
+      } else if (issue.type && issue.message) {
+        // New format: general issues
+        summary = `${issue.type}: ${issue.message}`;
+        message = issue.message;
+      } else {
+        // Fallback
+        summary = issue.message || 'Validation issue detected';
+        message = issue.message || 'Issue found during validation';
+      }
+      
+      return {
+        step: index + 1,
+        agent_action: 'lint' as const,
+        summary,
+        code: originalCode,
+        message,
+        timestamp: Date.now(),
+      };
+    });
+    
+    // Add a summary step if there are issues or if validation failed
+    if (singleResult.issues.length > 0 || !singleResult.validation_passed) {
+      steps.push({
+        step: steps.length + 1,
+        agent_action: 'lint' as const,
+        summary: singleResult.issues.length > 0 
+          ? `Found ${singleResult.summary.total_issues} issues (${singleResult.summary.violations} violations, ${singleResult.summary.warnings} warnings)`
+          : singleResult.message || 'Validation completed with issues',
+        code: originalCode,
+        message: singleResult.message,
+        timestamp: Date.now(),
+      });
+    } else if (singleResult.validation_passed) {
+      // Add a success step if validation passed with no issues
+      steps.push({
+        step: steps.length + 1,
+        agent_action: 'lint' as const,
+        summary: 'Validation passed - No issues found',
+        code: originalCode,
+        message: 'Playbook validation completed successfully',
+        timestamp: Date.now(),
+      });
+    }
+    
+    // Safely handle raw_output which might be undefined or missing properties
+    const rawOutput = singleResult.raw_output || {};
+    const stdout = rawOutput.stdout || '';
+    const stderr = rawOutput.stderr || '';
+    const rawOutputText = stdout + (stderr ? '\n' + stderr : '');
+    
+    // Store the actual backend response for parsing lint details
+    const actualRawOutput = singleResult.agent_analysis || rawOutputText || singleResult.message || '';
+    
+    return {
+      passed: singleResult.validation_passed,
+      final_code: originalCode, // No auto-fixing in new format
+      original_code: originalCode,
+      steps: steps,
+      total_steps: steps.length,
+      duration_ms: duration,
+      summary: {
+        fixes_applied: 0, // No auto-fixing in new format
+        lint_iterations: 1,
+        final_status: singleResult.validation_passed ? 'passed' : 'failed',
+      },
+      // Legacy compatibility
+      issues: singleResult.issues,
+      raw_output: actualRawOutput, // Store actual backend response for parsing
+      debug_info: {
+        status: singleResult.validation_passed ? "passed" : "failed",
+        playbook_length: originalCode.length,
+        steps_completed: steps.length,
+        lint_iterations: 1,
+        fixes_applied: 0,
+        exit_code: singleResult.exit_code,
+        profile: singleResult.profile,
+      },
+      error_message: singleResult.validation_passed ? undefined : singleResult.message,
+    };
+  };
+
   // Helper function to transform backend response to enhanced result
   const transformToStreamingResult = (data: unknown, originalCode: string, streamSteps: ValidationStep[]): StreamingValidationResult => {
     const dataObj = data as Record<string, unknown>;
@@ -353,6 +534,9 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     
     const lintSteps = steps.filter((s: ValidationStep) => s.agent_action === 'lint');
     const fixSteps = steps.filter((s: ValidationStep) => s.agent_action === 'llm_fix');
+    
+    // Store the actual backend response for parsing lint details
+    const actualRawOutput = dataObj.raw_output as string || dataObj.agent_analysis as string || '';
     
     return {
       passed: (dataObj.passed as boolean) || false,
@@ -368,7 +552,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       },
       // Legacy compatibility
       issues: steps.filter((s: ValidationStep) => s.agent_action === 'lint' && s.summary.includes('Failed')),
-      raw_output: steps.map((s: ValidationStep) => `Step ${s.step} (${s.agent_action}): ${s.summary}`).join('\n\n'),
+      raw_output: actualRawOutput, // Store actual backend response instead of UI summaries
       debug_info: {
         status: (dataObj.passed as boolean) ? "passed" : "failed",
         playbook_length: originalCode.length,
@@ -507,12 +691,12 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
             </div>
             <div>
               <h3 className={`font-bold text-xl transition-colors duration-300 ${passed ? "text-emerald-300" : "text-amber-300"}`}>
-                {passed ? "✨ Validation Passed!" : "🔧 Issues Fixed Successfully!"}
+                {passed ? "✨ Validation Passed!" : "🔍 Issues Found"}
               </h3>
               <div className="text-sm text-slate-400">
                 Profile: <span className="font-medium text-slate-200">{getProfileDisplayName(selectedProfile)}</span> • 
                 Steps: <span className="font-medium text-slate-200">{total_steps}</span> • 
-                Fixes: <span className="font-medium text-purple-300">{summary.fixes_applied}</span>
+                Issues: <span className="font-medium text-amber-300">{summary.lint_iterations}</span>
                 {duration_ms && <span> • Duration: <span className="font-medium text-blue-300">{duration_ms}ms</span></span>}
               </div>
             </div>
@@ -531,9 +715,9 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
             <div className="text-slate-200 text-2xl font-bold">{total_steps}</div>
             <div className="text-xs text-slate-400">Total Steps</div>
           </div>
-          <div className="text-center p-4 rounded-lg bg-purple-500/10 border border-purple-500/20 transition-all duration-300 hover:bg-purple-500/20 backdrop-blur-sm">
-            <div className="text-purple-400 text-2xl font-bold">{summary.fixes_applied}</div>
-            <div className="text-xs text-slate-400">Fixes Applied</div>
+          <div className="text-center p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 transition-all duration-300 hover:bg-amber-500/20 backdrop-blur-sm">
+            <div className="text-amber-400 text-2xl font-bold">{total_steps - (passed ? 1 : 0)}</div>
+            <div className="text-xs text-slate-400">Issues Found</div>
           </div>
           <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 transition-all duration-300 hover:bg-blue-500/20 backdrop-blur-sm">
             <div className="text-blue-400 text-2xl font-bold">{summary.lint_iterations}</div>
@@ -541,7 +725,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           </div>
           <div className="text-center p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 transition-all duration-300 hover:bg-emerald-500/20 backdrop-blur-sm">
             <div className={`text-2xl font-bold ${passed ? 'text-emerald-400' : 'text-amber-400'}`}>
-              {passed ? '✓' : '🔧'}
+              {passed ? '✓' : '🔍'}
             </div>
             <div className="text-xs text-slate-400">Final Status</div>
           </div>
@@ -742,6 +926,166 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     );
   };
 
+  const renderLintReport = () => {
+    if (!result || !showRawOutput) return null;
+    
+    // Extract lint issues from the result
+    const lintIssues = result.issues || [];
+    
+    // Parse raw output to extract detailed lint information
+    const parseRawOutput = (rawOutput: string) => {
+      const detailedIssues: Array<{
+        rule: string;
+        description: string;
+        line?: number;
+        severity: 'error' | 'warning';
+      }> = [];
+      
+      // Look for specific lint rule patterns in the raw output
+      const lines = rawOutput.split('\n');
+      for (const line of lines) {
+        // Match patterns like: yaml[truthy]: Truthy value should be one of [false, true]
+        const ruleMatch = line.match(/([a-zA-Z_]+\[[^\]]+\]):\s*(.+)/);
+        if (ruleMatch) {
+          detailedIssues.push({
+            rule: ruleMatch[1],
+            description: ruleMatch[2].trim(),
+            severity: 'error'
+          });
+        }
+        
+        // Match patterns like: /path/to/file.yml:4: [yaml[truthy]] Truthy value should be one of [false, true]
+        const fileLineMatch = line.match(/([^:]+):(\d+):\s*\[([^\]]+)\]\s*(.+)/);
+        if (fileLineMatch) {
+          detailedIssues.push({
+            rule: fileLineMatch[3],
+            description: fileLineMatch[4].trim(),
+            line: parseInt(fileLineMatch[2]),
+            severity: 'error'
+          });
+        }
+        
+        // Match patterns like: yaml[new-line-at-end-of-file]: No new line character at the end of file
+        const simpleRuleMatch = line.match(/([a-zA-Z_]+\[[^\]]+\]):\s*(.+)/);
+        if (simpleRuleMatch && !detailedIssues.some(issue => issue.rule === simpleRuleMatch[1])) {
+          detailedIssues.push({
+            rule: simpleRuleMatch[1],
+            description: simpleRuleMatch[2].trim(),
+            severity: 'error'
+          });
+        }
+      }
+      
+      return detailedIssues;
+    };
+    
+    const detailedIssues = parseRawOutput(result.raw_output);
+    const hasDetailedIssues = detailedIssues.length > 0;
+    
+    return (
+      <div className="bg-slate-800/40 rounded-lg border border-slate-600/30 p-4 backdrop-blur-sm" style={{animation: 'fadeIn 0.5s ease-out'}}>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-slate-200 flex items-center space-x-2">
+            <DocumentTextIcon className="w-4 h-4 text-slate-400" />
+            <span>Detailed Lint Report</span>
+          </h4>
+          <button
+            onClick={() => copyToClipboard(result.raw_output)}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Copy Full Output
+          </button>
+        </div>
+        
+        {hasDetailedIssues ? (
+          <div className="space-y-3">
+            {detailedIssues.map((issue, index) => (
+              <div key={index} className="bg-slate-900/70 rounded-lg p-3 border border-red-500/30 backdrop-blur-sm">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                      <span className="text-sm font-medium text-red-300">
+                        {issue.rule}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        issue.severity === 'error' 
+                          ? 'bg-red-500/20 text-red-300' 
+                          : 'bg-yellow-500/20 text-yellow-300'
+                      }`}>
+                        {issue.severity}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-300 mb-1">
+                      {issue.description}
+                    </p>
+                    {issue.line && (
+                      <p className="text-xs text-slate-400">
+                        Line {issue.line}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : lintIssues.length > 0 ? (
+          <div className="space-y-3">
+            {lintIssues.map((issue: unknown, index: number) => {
+              const lintIssue = issue as LintIssue;
+              return (
+                <div key={index} className="bg-slate-900/70 rounded-lg p-3 border border-red-500/30 backdrop-blur-sm">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                        <span className="text-sm font-medium text-red-300">
+                          {lintIssue.rule || lintIssue.type || 'Lint Issue'}
+                        </span>
+                        {lintIssue.severity && (
+                          <span className={`text-xs px-2 py-1 rounded ${
+                            lintIssue.severity === 'error' 
+                              ? 'bg-red-500/20 text-red-300' 
+                              : 'bg-yellow-500/20 text-yellow-300'
+                          }`}>
+                            {lintIssue.severity}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-300 mb-1">
+                        {lintIssue.description || lintIssue.message}
+                      </p>
+                      {lintIssue.line && (
+                        <p className="text-xs text-slate-400">
+                          Line {lintIssue.line}
+                          {lintIssue.filename && ` in ${lintIssue.filename}`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-slate-900/70 rounded-lg p-4 border border-slate-600/30 backdrop-blur-sm">
+            <p className="text-sm text-slate-400 text-center">No detailed lint issues available</p>
+          </div>
+        )}
+        
+        {/* Show raw output as well for debugging */}
+        <div className="mt-4">
+          <h5 className="text-sm font-medium text-slate-300 mb-2">Raw Output</h5>
+          <div className="bg-slate-900/70 rounded-lg p-3 border border-slate-600/30 backdrop-blur-sm">
+            <pre className="text-xs text-slate-300 font-mono whitespace-pre-wrap overflow-x-auto max-h-32 validation-scrollbar">
+              {result.raw_output || 'No raw output available'}
+            </pre>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderRawOutput = () => {
     if (!result || !showRawOutput) return null;
     
@@ -818,12 +1162,12 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
             ) : result ? (
               <>
                 <SparklesIcon className="w-4 h-4" />
-                <span>Re-validate & Fix</span>
+                <span>Re-validate Playbook</span>
               </>
             ) : (
               <>
                 <ShieldCheckIcon className="w-4 h-4" />
-                <span>Validate & Auto-Fix Playbook</span>
+                <span>Validate Playbook</span>
               </>
             )}
           </div>
@@ -934,6 +1278,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
           )}
           
           {renderCodeComparison()}
+          {renderLintReport()}
           {renderRawOutput()}
         </div>
       )}

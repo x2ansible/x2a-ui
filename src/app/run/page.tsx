@@ -561,12 +561,16 @@ function RunWorkflowPageInner() {
               onComplete={handleGenerateComplete}
             />
           ) : step === 3 ? (
-            <ValidationPanel
-              playbook={generatedPlaybook}
-              validationConfig={validationConfig}
-              onLogMessage={addLogMessage}
-              onValidationComplete={handleValidationComplete}
-            />
+            <>
+              {console.log("[RunPage] ValidationPanel props:", { validationProfile, generatedPlaybookLength: generatedPlaybook?.length })}
+              <ValidationPanel
+                playbook={generatedPlaybook}
+                validationConfig={validationConfig}
+                selectedProfile={validationProfile}
+                onLogMessage={addLogMessage}
+                onValidationComplete={handleValidationComplete}
+              />
+            </>
           ) : step === 4 ? (
             <DeploymentPanel
               playbook={generatedPlaybook}

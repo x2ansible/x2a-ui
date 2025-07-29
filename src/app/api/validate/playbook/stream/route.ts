@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   
   try {
     const body = await request.json();
-    const { playbook_content, profile = 'production' } = body;
+    const { playbook_content, profile = 'basic' } = body;
 
     if (!playbook_content || !playbook_content.trim()) {
       return NextResponse.json(
@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
           playbook_content,
           profile,
         }),
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(120000), // 2 minute timeout
+        // Add timeout to prevent hanging - increased for complex validations
+        signal: AbortSignal.timeout(600000), // 10 minute timeout for LLM-driven validations
       });
 
       console.log("📡 Backend response status:", response.status);

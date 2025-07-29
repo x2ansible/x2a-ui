@@ -185,13 +185,13 @@ export default function GeneratePanel({
             try {
               const jsonStr = trimmed.slice(6).trim();
               if (jsonStr === "[DONE]") {
-                logMessage("✅ Stream completed");
+                logMessage(" Stream completed");
                 continue;
               }
               const eventData = JSON.parse(jsonStr);
               if (eventData.playbook || eventData.data) {
                 finalPlaybook = eventData.playbook || eventData.data;
-                logMessage("✅ Playbook received from stream");
+                logMessage(" Playbook received from stream");
               }
             } catch {
               continue;
@@ -204,8 +204,8 @@ export default function GeneratePanel({
 
       // Keep the existing animation - just pass the playbook to startStreaming
       setPlaybook(finalPlaybook);
-      startStreaming(finalPlaybook); // ✅ Keep the animation!
-      logMessage(`✅ Playbook generated: ${finalPlaybook.length} characters`);
+      startStreaming(finalPlaybook); //  Keep the animation!
+      logMessage(` Playbook generated: ${finalPlaybook.length} characters`);
       if (onComplete) onComplete(finalPlaybook);
         
     } catch (err: unknown) {

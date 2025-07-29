@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
             const { done, value } = await reader.read();
             
             if (done) {
-              console.log("✅ Stream completed successfully");
+              console.log(" Stream completed successfully");
               controller.close();
               break;
             }

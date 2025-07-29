@@ -11,7 +11,7 @@ interface ValidationStep {
 }
 
 interface StreamingProgress {
-  type: 'progress' | 'final_result' | 'error';
+  type: 'progress' | 'final_result' | 'error' | 'result' | 'end';
   message?: string;
   step?: number;
   agent_action?: 'lint' | 'llm_fix';
@@ -126,7 +126,7 @@ export const useValidatePlaybook = () => {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Accept': 'text/event-stream, application/json',
+            'Accept': 'text/event-stream',
           },
           body: JSON.stringify({ 
             playbook_content: cleanedPlaybook, 
@@ -238,6 +238,29 @@ export const useValidatePlaybook = () => {
 
                   console.log(`[useValidatePlaybook] Progress Step ${step.step}:`, step.agent_action);
                 } 
+                // Handle new single-result format
+                else if (data.type === "result" && data.data) {
+                  console.log("[useValidatePlaybook] Received single validation result");
+                  
+                  const singleResult = data.data;
+                  const enhancedResult = createEnhancedResultFromSingleResult(singleResult, cleanedPlaybook);
+                  
+                  updateState({
+                    validationResult: enhancedResult,
+                    progress: null,
+                    isValidating: false,
+                    streamingActive: false,
+                  });
+                  
+                  streamComplete = true;
+                  break;
+                }
+                // Handle end signal
+                else if (data.type === "end") {
+                  console.log("[useValidatePlaybook] Received end signal");
+                  streamComplete = true;
+                  break;
+                }
                 else if (data.type === "final_result" && data.data) {
                   console.log("[useValidatePlaybook] Received final result");
                   
@@ -380,6 +403,87 @@ export const useValidatePlaybook = () => {
     resetValidation,
   };
 };
+
+// Helper function to create enhanced result from single-result format
+function createEnhancedResultFromSingleResult(
+  singleResult: unknown, 
+  originalCode: string
+): EnhancedValidationResult {
+  const result = singleResult as Record<string, unknown>;
+  const issues = (result.issues as Array<{
+    rule: string;
+    description: string;
+    line: number;
+    severity: string;
+  }>) || [];
+  
+  // Convert each lint issue to a step for UI consistency
+  const steps: ValidationStep[] = issues.map((issue, index) => ({
+    step: index + 1,
+    agent_action: 'lint' as const,
+    summary: `${issue.rule}: ${issue.description}`,
+    code: originalCode,
+    message: `Line ${issue.line}: ${issue.description}`,
+    timestamp: Date.now(),
+  }));
+  
+  // Add a summary step if there are issues or if validation failed
+  if (issues.length > 0 || !(result.validation_passed as boolean)) {
+    const summary = result.summary as { total_issues: number; violations: number; warnings: number };
+    steps.push({
+      step: steps.length + 1,
+      agent_action: 'lint' as const,
+      summary: issues.length > 0 
+        ? `Found ${summary.total_issues} issues (${summary.violations} violations, ${summary.warnings} warnings)`
+        : (result.message as string) || 'Validation completed with issues',
+      code: originalCode,
+      message: result.message as string,
+      timestamp: Date.now(),
+    });
+  } else if (result.validation_passed as boolean) {
+    // Add a success step if validation passed with no issues
+    steps.push({
+      step: steps.length + 1,
+      agent_action: 'lint' as const,
+      summary: 'Validation passed - No issues found',
+      code: originalCode,
+      message: 'Playbook validation completed successfully',
+      timestamp: Date.now(),
+    });
+  }
+  
+  // Safely handle raw_output which might be undefined or missing properties
+  const rawOutput = result.raw_output as { stdout?: string; stderr?: string } || {};
+  const stdout = rawOutput.stdout || '';
+  const stderr = rawOutput.stderr || '';
+  const rawOutputText = stdout + (stderr ? '\n' + stderr : '');
+  
+  return {
+    passed: (result.validation_passed as boolean) || false,
+    final_code: originalCode, // No auto-fixing in new format
+    original_code: originalCode,
+    steps: steps,
+    total_steps: steps.length,
+    summary: {
+      fixes_applied: 0, // No auto-fixing in new format
+      lint_iterations: 1,
+      final_status: (result.validation_passed as boolean) ? 'passed' : 'failed',
+    },
+    // Legacy compatibility
+    issues: steps,
+    raw_output: rawOutputText,
+    debug_info: {
+      status: (result.validation_passed as boolean) ? "passed" : "failed",
+      playbook_length: originalCode.length,
+      steps_completed: steps.length,
+      lint_iterations: 1,
+      fixes_applied: 0,
+      exit_code: result.exit_code as number,
+      profile: result.profile as string,
+    },
+    error_message: (result.validation_passed as boolean) ? undefined : (result.message as string),
+  };
+}
 
 // Helper function to create enhanced result
 function createEnhancedResult(

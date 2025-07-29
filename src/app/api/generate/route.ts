@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
             const { done, value } = await reader.read();
             
             if (done) {
-              console.log("✅ Generate stream completed successfully");
+              console.log(" Generate stream completed successfully");
               controller.close();
               break;
             }
