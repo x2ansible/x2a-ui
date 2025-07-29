@@ -111,7 +111,7 @@ export const useValidatePlaybook = () => {
           progress: null,
           streamingActive: false,
         });
-        console.log("[useValidatePlaybook] Validation timed out");
+        // console.log("[useValidatePlaybook] Validation timed out");
       }, 120000);
 
       try {
@@ -148,7 +148,7 @@ export const useValidatePlaybook = () => {
         if (contentType?.includes("application/json")) {
           updateState({ progress: "Processing validation results..." });
           const result = await response.json();
-          console.log("[useValidatePlaybook] Received direct JSON response");
+          // console.log("[useValidatePlaybook] Received direct JSON response");
           
           const enhancedResult = createEnhancedResult(result, cleanedPlaybook, []);
           updateState({
@@ -185,7 +185,7 @@ export const useValidatePlaybook = () => {
             const { done, value } = await reader.read();
             
             if (done) {
-              console.log("[useValidatePlaybook] Stream reading completed");
+              // console.log("[useValidatePlaybook] Stream reading completed");
               streamComplete = true;
               break;
             }
@@ -208,7 +208,7 @@ export const useValidatePlaybook = () => {
                 if (trimmedLine.startsWith('data: ')) {
                   const dataStr = trimmedLine.slice(6);
                   if (dataStr === '[DONE]') {
-                    console.log("[useValidatePlaybook] Received [DONE] signal");
+                    // console.log("[useValidatePlaybook] Received [DONE] signal");
                     streamComplete = true;
                     break;
                   }
@@ -236,11 +236,11 @@ export const useValidatePlaybook = () => {
                     steps: [...collectedSteps],
                   });
 
-                  console.log(`[useValidatePlaybook] Progress Step ${step.step}:`, step.agent_action);
+                  // console.log(`[useValidatePlaybook] Progress Step ${step.step}:`, step.agent_action);
                 } 
                 // Handle new single-result format
                 else if (data.type === "result" && data.data) {
-                  console.log("[useValidatePlaybook] Received single validation result");
+                  // console.log("[useValidatePlaybook] Received single validation result");
                   
                   const singleResult = data.data;
                   const enhancedResult = createEnhancedResultFromSingleResult(singleResult, cleanedPlaybook);
@@ -257,12 +257,12 @@ export const useValidatePlaybook = () => {
                 }
                 // Handle end signal
                 else if (data.type === "end") {
-                  console.log("[useValidatePlaybook] Received end signal");
+                  // console.log("[useValidatePlaybook] Received end signal");
                   streamComplete = true;
                   break;
                 }
                 else if (data.type === "final_result" && data.data) {
-                  console.log("[useValidatePlaybook] Received final result");
+                  // console.log("[useValidatePlaybook] Received final result");
                   
                   const finalData = data.data;
                   const enhancedResult = createEnhancedResult(finalData, cleanedPlaybook, collectedSteps);
@@ -319,7 +319,7 @@ export const useValidatePlaybook = () => {
         clearTimeout(timeoutId);
         
         if ((error as Error).name === 'AbortError') {
-          console.log("[useValidatePlaybook] Validation was cancelled");
+          // console.log("[useValidatePlaybook] Validation was cancelled");
           updateState({
             progress: "Validation cancelled",
             isValidating: false,
@@ -393,7 +393,7 @@ export const useValidatePlaybook = () => {
     });
     
     abortControllerRef.current = null;
-    console.log("[useValidatePlaybook] State reset");
+            // console.log("[useValidatePlaybook] State reset");
   }, []);
 
   return {

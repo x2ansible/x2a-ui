@@ -1,11 +1,10 @@
 import React from 'react';
-import { GitBranch, AlertTriangle, Shield, TrendingUp, Clock, CheckCircle, Target } from 'lucide-react';
+import { GitBranch, AlertTriangle, Shield, Clock, CheckCircle, Target, Settings } from 'lucide-react';
 import { BackendAnalysisResponse } from '../types/BackendTypes';
 import { 
   getMigrationInfo, 
   getRiskInfo, 
-  getBackendValue,
-  getComplexityInfo  // ADDED: Import the complexity function
+  getBackendValue
 } from '../utils/backendUtils';
 
 interface AssessmentTabProps {
@@ -15,34 +14,177 @@ interface AssessmentTabProps {
 export const AssessmentTab: React.FC<AssessmentTabProps> = ({ result }) => {
   const migrationInfo = getMigrationInfo(result);
   const riskInfo = getRiskInfo(result);
-  const complexityInfo = getComplexityInfo(result);  // ADDED: Get complexity info
   const recommendations = result.recommendations;
-  const anyResult = result as Record<string, unknown>;
-  
-  // Technology detection
-  const isSalt = result.metadata?.technology_type === 'salt' || anyResult.managed_services || anyResult.object_type;
-  const isAnsibleUpgrade = result.metadata?.technology_type === 'ansible-upgrade';
-  const isPuppet = result.metadata?.technology_type === 'puppet' || result.object_type || result.puppet_resources;
 
   return (
     <div className="space-y-6">
       
-      {/* Backend Recommendation - Only if recommendations exist */}
+      {/* Chef Cookbook Identity - Only if meaningful Chef-specific data exists */}
+      {((result.cookbook_name && !result.cookbook_name.includes('stream_cookbook_')) || 
+       (result.pattern_analyzer_facts?.extracted_cookbook_name && 
+        !result.pattern_analyzer_facts.extracted_cookbook_name.includes('stream_cookbook_')) ||
+       (result.pattern_analyzer_facts?.extracted_version && 
+        result.pattern_analyzer_facts.extracted_version !== 'unknown') ||
+       result.confidence_source || 
+       result.analysis_method) && (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-emerald-500/20 rounded-lg border border-emerald-400/30">
+              <Shield size={18} className="text-emerald-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-200">Chef Cookbook Identity</h3>
+          </div>
+          
+          <div className="relative overflow-hidden rounded-xl border border-gray-600/30 bg-gradient-to-br from-gray-800/40 to-gray-900/40 backdrop-blur-sm shadow-lg">
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Extracted Cookbook Name */}
+                {((result.cookbook_name && !result.cookbook_name.includes('stream_cookbook_')) || 
+                  (result.pattern_analyzer_facts?.extracted_cookbook_name && 
+                   !result.pattern_analyzer_facts.extracted_cookbook_name.includes('stream_cookbook_'))) && (
+                  <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
+                    <div className="text-sm text-gray-500 mb-1">Cookbook Name</div>
+                    <div className="text-lg font-mono text-emerald-400">
+                      {result.cookbook_name || result.pattern_analyzer_facts?.extracted_cookbook_name}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Extracted Version */}
+                {result.pattern_analyzer_facts?.extracted_version && 
+                 result.pattern_analyzer_facts.extracted_version !== 'unknown' && (
+                  <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
+                    <div className="text-sm text-gray-500 mb-1">Extracted Version</div>
+                    <div className="text-lg font-mono text-blue-400">
+                      {result.pattern_analyzer_facts.extracted_version}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Analysis Method */}
+                {result.analysis_method && (
+                  <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
+                    <div className="text-sm text-gray-500 mb-1">Analysis Method</div>
+                    <div className="text-sm text-gray-300">
+                      {result.analysis_method}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Confidence Source */}
+                {result.confidence_source && (
+                  <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
+                    <div className="text-sm text-gray-500 mb-1">Confidence Source</div>
+                    <div className="text-sm text-gray-300">
+                      {result.confidence_source}
+                    </div>
+                  </div>
+                )}
+                
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent"></div>
+          </div>
+        </div>
+      )}
+
+      {/* Chef Configuration Assessment - Only if configuration_details exists */}
+      {result.configuration_details && (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-indigo-500/20 rounded-lg border border-indigo-400/30">
+              <Settings size={18} className="text-indigo-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-200">Chef Configuration Assessment</h3>
+          </div>
+          
+          <div className="relative overflow-hidden rounded-xl border border-gray-600/30 bg-gradient-to-br from-gray-800/40 to-gray-900/40 backdrop-blur-sm shadow-lg">
+            <div className="p-6">
+              <div className="bg-gray-900/50 rounded border border-gray-700/30 p-4">
+                <div className="text-sm text-gray-500 mb-2">Configuration Details</div>
+                <div className="text-gray-300 leading-relaxed text-sm">
+                  {result.configuration_details}
+                </div>
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-400/30 to-transparent"></div>
+          </div>
+        </div>
+            )}
+
+      {/* Chef Analysis Details - Only if pattern_analyzer_facts exist */}
+      {result.pattern_analyzer_facts && (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-400/30">
+              <Target size={18} className="text-purple-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-200">Chef Analysis Details</h3>
+          </div>
+          
+          <div className="relative overflow-hidden rounded-xl border border-gray-600/30 bg-gradient-to-br from-gray-800/40 to-gray-900/40 backdrop-blur-sm shadow-lg">
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* Extraction Method */}
+                {result.pattern_analyzer_facts.extraction_method && (
+                  <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
+                    <div className="text-sm text-gray-500 mb-1">Extraction Method</div>
+                    <div className="text-sm text-gray-300">
+                      {result.pattern_analyzer_facts.extraction_method}
+                    </div>
+                  </div>
+                )}
+                
+                {/* AST Available */}
+                {result.pattern_analyzer_facts.ast_available !== undefined && (
+                  <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
+                    <div className="text-sm text-gray-500 mb-1">AST Available</div>
+                    <div className={`text-sm font-semibold ${
+                      result.pattern_analyzer_facts.ast_available ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {result.pattern_analyzer_facts.ast_available ? 'Yes' : 'No'}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Pattern Fallback Used */}
+                {result.pattern_analyzer_facts.pattern_fallback_used !== undefined && (
+                  <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
+                    <div className="text-sm text-gray-500 mb-1">Pattern Fallback</div>
+                    <div className={`text-sm font-semibold ${
+                      result.pattern_analyzer_facts.pattern_fallback_used ? 'text-yellow-400' : 'text-green-400'
+                    }`}>
+                      {result.pattern_analyzer_facts.pattern_fallback_used ? 'Used' : 'Not Used'}
+                    </div>
+                  </div>
+                )}
+                
+              </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-400/30 to-transparent"></div>
+          </div>
+        </div>
+      )}
+
+      {/* Backend Recommendation - Only if meaningful recommendations exist */}
       {recommendations && (
+        recommendations.consolidation_action || 
+        recommendations.rationale || 
+        (recommendations.migration_priority && recommendations.migration_priority !== 'LOW') ||
+        (recommendations.risk_factors && recommendations.risk_factors.length > 0)
+      ) && (
         <div>
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-400/30">
               <GitBranch size={18} className="text-blue-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-200">
-              {isSalt ? 'Salt State Assessment' : 
-               isAnsibleUpgrade ? 'Upgrade Assessment' :
-               isPuppet ? 'Puppet Conversion Assessment' :
-               'Backend Recommendations'}
+              Chef Analysis Assessment
             </h3>
-            {recommendations.migration_priority && (
+            {recommendations.migration_priority && recommendations.migration_priority !== 'LOW' && (
               <div className={`px-2 py-1 rounded text-xs font-semibold ${
-                recommendations.migration_priority === 'LOW' ? 'bg-green-900/40 text-green-300' :
                 recommendations.migration_priority === 'MEDIUM' ? 'bg-yellow-900/40 text-yellow-300' :
                 'bg-red-900/40 text-red-300'
               }`}>
@@ -88,7 +230,7 @@ export const AssessmentTab: React.FC<AssessmentTabProps> = ({ result }) => {
                     </div>
                     <div>
                       <div className="font-semibold text-gray-200 mb-2">
-                        Backend Analysis
+                        Analysis Summary
                       </div>
                       <div className="text-gray-300 leading-relaxed text-sm">
                         {getBackendValue(recommendations.rationale)}
@@ -262,8 +404,8 @@ export const AssessmentTab: React.FC<AssessmentTabProps> = ({ result }) => {
                 <div className="flex-1">
                   <div className="font-semibold text-gray-200 mb-2">
                     {result.convertible 
-                      ? 'Backend confirms this is convertible to Ansible' 
-                      : 'Backend identified conversion challenges'}
+                      ? 'Conversion Status: Ready' 
+                      : 'Conversion Status: Requires Review'}
                   </div>
                   
                   {typeof (result as Record<string, unknown>).conversion_notes === 'string' && 
@@ -282,76 +424,13 @@ export const AssessmentTab: React.FC<AssessmentTabProps> = ({ result }) => {
         </div>
       )}
 
-      {/* Complexity Assessment - Only if tree_sitter or complexity_level exists */}
-      {(result.tree_sitter_facts?.complexity_score !== undefined || result.complexity_level) && (
-        <div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-purple-500/20 rounded-lg border border-purple-400/30">
-              <TrendingUp size={18} className="text-purple-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-200">Complexity Analysis</h3>
-          </div>
-          
-          <div className="relative overflow-hidden rounded-xl border border-gray-600/30 bg-gradient-to-br from-gray-800/40 to-gray-900/40 backdrop-blur-sm shadow-lg">
-            <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                
-                {/* Tree-sitter Complexity Score */}
-                {result.tree_sitter_facts?.complexity_score !== undefined && (
-                  <div className="text-center bg-gradient-to-br from-purple-900/30 to-purple-800/20 rounded-lg p-4 border border-purple-500/30">
-                    <div className="text-2xl font-bold text-purple-400 mb-1">
-                      {result.tree_sitter_facts.complexity_score}
-                    </div>
-                    <div className="text-xs text-gray-500">Static Analysis Score</div>
-                    <div className={`text-xs mt-1 font-semibold ${
-                      result.tree_sitter_facts.complexity_score > 15 ? 'text-red-400' :
-                      result.tree_sitter_facts.complexity_score > 8 ? 'text-yellow-400' :
-                      'text-green-400'
-                    }`}>
-                      {result.tree_sitter_facts.complexity_score > 15 ? 'HIGH' :
-                       result.tree_sitter_facts.complexity_score > 8 ? 'MEDIUM' : 'LOW'}
-                    </div>
-                  </div>
-                )}
-                
-                {/* LLM Complexity Level - UPDATED to use getComplexityInfo */}
-                {complexityInfo && (
-                  <div className="text-center bg-gradient-to-br from-blue-900/30 to-blue-800/20 rounded-lg p-4 border border-blue-500/30">
-                    <div className={`text-lg font-bold mb-1 ${complexityInfo.color}`}>
-                      {complexityInfo.display}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {complexityInfo.source === 'puppet' ? 'Puppet Assessment' :
-                       complexityInfo.source === 'tree-sitter' ? 'Static Analysis' :
-                       complexityInfo.source === 'llm' ? 'LLM Assessment' :
-                       'Complexity Assessment'}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Resource Count */}
-                {result.tree_sitter_facts?.total_resources !== undefined && (
-                  <div className="text-center bg-gradient-to-br from-green-900/30 to-green-800/20 rounded-lg p-4 border border-green-500/30">
-                    <div className="text-2xl font-bold text-green-400 mb-1">
-                      {result.tree_sitter_facts.total_resources}
-                    </div>
-                    <div className="text-xs text-gray-500">Resources Found</div>
-                  </div>
-                )}
-                
-              </div>
-            </div>
-            
-            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-400/30 to-transparent"></div>
-          </div>
-        </div>
-      )}
+
 
       {/* Safe Fallback - only if no assessment data at all */}
       {!recommendations && 
        !migrationInfo && 
        (result as Record<string, unknown>).convertible === undefined && 
-       !result.tree_sitter_facts?.complexity_score && 
+       !result.pattern_analyzer_facts?.complexity_score && 
        !result.complexity_level && (
         <div className="text-center py-12 bg-gradient-to-br from-gray-800/30 to-gray-900/30 rounded-xl border border-gray-700/50">
           <div className="p-4 bg-gray-700/20 rounded-full inline-flex mb-4">

@@ -22,7 +22,6 @@ import {
 
 import { AnalysisOverviewTab } from './tabs/AnalysisOverviewTab';
 import { TechnicalDetailsTab } from './tabs/TechnicalDetailsTab';
-import { AssessmentTab } from './tabs/AssessmentTab';
 import { EnhancedAnalysisLoading } from '../EnhancedAnalysisLoading';
 
 // SAFE: Sanitize result object to prevent React rendering errors
@@ -55,34 +54,17 @@ const sanitizeResult = (result: BackendAnalysisResponse): BackendAnalysisRespons
 };
 
 // Quick Alternative: Add technologyType prop without modifying interface
-const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: string }> = ({
+const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
   result,
   loading,
-  error,
-  technologyType // Added this prop directly
+  error
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
   // Get technology type for enhanced loading
   const getTechnologyType = () => {
-    // Use passed prop first
-    if (technologyType) {
-      return technologyType;
-    }
-    
-    // Fallback to detection from result
-    if (result?.metadata?.technology_type) {
-      return result.metadata.technology_type;
-    }
-    
-    // Fallback detection from result structure
-    const anyResult = result as Record<string, unknown>;
-    if (anyResult?.managed_services || anyResult?.object_type) return 'salt';
-    if (anyResult?.current_state || anyResult?.upgrade_requirements) return 'ansible-upgrade';
-    if (result?.object_type || result?.object_name || result?.puppet_resources) return 'puppet';
-    if (result?.functionality || result?.tree_sitter_facts) return 'chef';
-    
-    return 'chef'; // default
+    // Always return chef since we only support Chef
+    return 'chef';
   };
 
   // Handle loading state with enhanced animation
@@ -132,18 +114,10 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
           <p className="text-sm text-gray-500 leading-relaxed mb-6">
             Upload and analyze files to see detailed results
           </p>
-          <div className="grid grid-cols-3 gap-3 text-xs">
+          <div className="grid grid-cols-1 gap-3 text-xs">
             <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-              <div className="text-blue-400 font-bold">🍳</div>
+              <div className="text-orange-400 font-bold">👨‍🍳</div>
               <div className="text-gray-500 mt-1">Chef</div>
-            </div>
-            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-              <div className="text-green-400 font-bold">🟢</div>
-              <div className="text-gray-500 mt-1">Salt</div>
-            </div>
-            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-              <div className="text-red-400 font-bold">🅰️</div>
-              <div className="text-gray-500 mt-1">Ansible</div>
             </div>
           </div>
         </div>
@@ -192,11 +166,10 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
   // Non-hardcoded status extraction
   const statusText = getAnalysisStatus(safeResult);
 
-  // Tab configuration
+  // Tab configuration - Assessment Tab disabled
   const tabs = [
     { id: 'overview' as TabId, label: 'Overview', icon: FileCode },
-    { id: 'technical' as TabId, label: 'Technical', icon: AlertTriangle },
-    { id: 'assessment' as TabId, label: 'Assessment', icon: TrendingUp }
+    { id: 'technical' as TabId, label: 'Technical', icon: AlertTriangle }
   ];
 
   return (
@@ -346,7 +319,6 @@ const AnalysisPanel: React.FC<ClassificationPanelProps & { technologyType?: stri
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 bg-black">
         {activeTab === 'overview' && <AnalysisOverviewTab result={safeResult} />}
         {activeTab === 'technical' && <TechnicalDetailsTab result={safeResult} />}
-        {activeTab === 'assessment' && <AssessmentTab result={safeResult} />}
       </div>
       
     </div>

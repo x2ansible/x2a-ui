@@ -202,11 +202,7 @@ export default function FileTreeSelector({
       {/* Header */}
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
-          📁 {technologyType === 'chef' ? '👨‍🍳' : 
-               technologyType === 'bladelogic' ? '⚔️' :
-               technologyType === 'puppet' ? '🎭' :
-               technologyType === 'ansible' ? '📜' : '🏗️'} 
-          /{technologyType}/ folder
+          📁 👨‍🍳 /{technologyType}/ folder
         </h4>
         <div className="text-xs text-gray-500">
           {filteredFiles.length} files

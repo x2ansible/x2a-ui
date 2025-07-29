@@ -22,11 +22,11 @@ import DeploymentSidebar from "@/components/DeploymentSidebar";
 import { useFileOperations } from "@/hooks/useFileOperations";
 import { useGitOperations } from "@/hooks/useGitOperations";
 import { useChefAnalyse } from "@/hooks/analyse/chef/useChefAnalyse";
-import { useBladeLogicAnalyse } from "@/hooks/analyse/bladelogic/useBladeLogicAnalyse";
-import { useShellAnalyse } from "@/hooks/analyse/shell/useShellAnalyse";
-import { useSaltAnalyse } from "@/hooks/analyse/salt/useSaltAnalyse";
-import { useAnsibleUpgradeAnalyse } from "@/hooks/analyse/ansible-upgrade/useAnsibleUpgradeAnalyse";
-import { usePuppetAnalyse } from "@/hooks/analyse/puppet/usePuppetAnalyse";
+// import { useBladeLogicAnalyse } from "@/hooks/analyse/bladelogic/useBladeLogicAnalyse";
+// import { useShellAnalyse } from "@/hooks/analyse/shell/useShellAnalyse";
+// import { useSaltAnalyse } from "@/hooks/analyse/salt/useSaltAnalyse";
+// import { useAnsibleUpgradeAnalyse } from "@/hooks/analyse/ansible-upgrade/useAnsibleUpgradeAnalyse";
+// import { usePuppetAnalyse } from "@/hooks/analyse/puppet/usePuppetAnalyse";
 
 import { BackendAnalysisResponse } from "@/components/analyse/types/BackendTypes";
 
@@ -66,7 +66,7 @@ function RunWorkflowPageInner() {
   const [validationResult, setValidationResult] = useState<Record<string, unknown> | null>(null);
 
   // UPDATED: Add puppet to technology type
-  const [technologyType, setTechnologyType] = useState<"chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade">("chef");
+  const [technologyType, setTechnologyType] = useState<"chef">("chef");
 
   // Add vectorDbId state
   const [vectorDbId] = useState<string>("iac"); // Default to "iac" knowledge base
@@ -172,150 +172,85 @@ function RunWorkflowPageInner() {
     addLog: addLogMessage
   });
   
-  const { analyseBladeLogic } = useBladeLogicAnalyse({
-    BACKEND_URL,
-    files: {},
-    setAnalysisResult: useCallback((result) => {
-      setAnalysisResult(result);
-      if (result && result.success !== false) {
-        markStepAsCompleted(0);
-        addLogMessage("BladeLogic analysis completed - ready for next step");
-      }
-    }, [markStepAsCompleted, addLogMessage]),
-    setLoading,
-    addLog: addLogMessage
-  });
+  // const { analyseBladeLogic } = useBladeLogicAnalyse({
+  //   BACKEND_URL,
+  //   files: {},
+  //   setAnalysisResult: useCallback((result) => {
+  //     setAnalysisResult(result);
+  //     if (result && result.success !== false) {
+  //       markStepAsCompleted(0);
+  //       addLogMessage("BladeLogic analysis completed - ready for next step");
+  //     }
+  //   }, [markStepAsCompleted, addLogMessage]),
+  //   setLoading,
+  //   addLog: addLogMessage
+  // });
 
-  const { analyseShell } = useShellAnalyse({
-    BACKEND_URL,
-    files: {},
-    setAnalysisResult: useCallback((result) => {
-      setAnalysisResult(result);
-      if (result && result.success !== false) {
-        markStepAsCompleted(0);
-        addLogMessage("Shell script analysis completed - ready for next step");
-      }
-    }, [markStepAsCompleted, addLogMessage]),
-    setLoading,
-    addLog: addLogMessage
-  });
+  // const { analyseShell } = useShellAnalyse({
+  //   BACKEND_URL,
+  //   files: {},
+  //   setAnalysisResult: useCallback((result) => {
+  //     setAnalysisResult(result);
+  //     if (result && result.success !== false) {
+  //       markStepAsCompleted(0);
+  //       addLogMessage("Shell script analysis completed - ready for next step");
+  //     }
+  //   }, [markStepAsCompleted, addLogMessage]),
+  //   setLoading,
+  //   addLog: addLogMessage
+  // });
 
-  // Salt analysis hook
-  const { analyseSalt } = useSaltAnalyse({
-    BACKEND_URL,
-    files: {},
-    setAnalysisResult: useCallback((result) => {
-      setAnalysisResult(result);
-      if (result && result.success !== false) {
-        markStepAsCompleted(0);
-        addLogMessage("Salt analysis completed - ready for next step");
-      }
-    }, [markStepAsCompleted, addLogMessage]),
-    setLoading,
-    addLog: addLogMessage
-  });
+  // // Salt analysis hook
+  // const { analyseSalt } = useSaltAnalyse({
+  //   BACKEND_URL,
+  //   files: {},
+  //   setAnalysisResult: useCallback((result) => {
+  //     setAnalysisResult(result);
+  //     if (result && result.success !== false) {
+  //       markStepAsCompleted(0);
+  //       addLogMessage("Salt analysis completed - ready for next step");
+  //     }
+  //   }, [markStepAsCompleted, addLogMessage]),
+  //   setLoading,
+  //   addLog: addLogMessage
+  // });
 
-  // Ansible Upgrade analysis hook
-  const { analyseAnsibleUpgrade } = useAnsibleUpgradeAnalyse({
-    BACKEND_URL,
-    files: {},
-    setAnalysisResult: useCallback((result) => {
-      setAnalysisResult(result);
-      if (result && result.success !== false) {
-        markStepAsCompleted(0);
-        addLogMessage("Ansible upgrade analysis completed - ready for next step");
-      }
-    }, [markStepAsCompleted, addLogMessage]),
-    setLoading,
-    addLog: addLogMessage
-  });
+  // // Ansible Upgrade analysis hook
+  // const { analyseAnsibleUpgrade } = useAnsibleUpgradeAnalyse({
+  //   BACKEND_URL,
+  //   files: {},
+  //   setAnalysisResult: useCallback((result) => {
+  //     setAnalysisResult(result);
+  //     if (result && result.success !== false) {
+  //       markStepAsCompleted(0);
+  //       addLogMessage("Ansible upgrade analysis completed - ready for next step");
+  //     }
+  //   }, [markStepAsCompleted, addLogMessage]),
+  //   setLoading,
+  //   addLog: addLogMessage
+  // });
 
-  // Puppet analysis hook
-  const { analysePuppet } = usePuppetAnalyse({
-    BACKEND_URL,
-    files: {},
-    setAnalysisResult: useCallback((result) => {
-      setAnalysisResult(result);
-      if (result && result.success !== false) {
-        markStepAsCompleted(0);
-        addLogMessage("Puppet analysis completed - ready for next step");
-      }
-    }, [markStepAsCompleted, addLogMessage]),
-    setLoading,
-    addLog: addLogMessage
-  });
+  // // Puppet analysis hook
+  // const { analysePuppet } = usePuppetAnalyse({
+  //   BACKEND_URL,
+  //   files: {},
+  //   setAnalysisResult: useCallback((result) => {
+  //     setAnalysisResult(result);
+  //     if (result && result.success !== false) {
+  //       markStepAsCompleted(0);
+  //       addLogMessage("Puppet analysis completed - ready for next step");
+  //     }
+  //   }, [markStepAsCompleted, addLogMessage]),
+  //   setLoading,
+  //   addLog: addLogMessage
+  // });
 
-  // UPDATED: Smart technology detection with puppet support
-  const detectTechnologyType = (files: { path: string; content: string }[]): "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade" => {
-    // Check for Puppet manifests first
-    if (files.some(f => 
-      f.path.endsWith('.pp') || 
-      f.path.includes('puppet') ||
-      /class\s+\w+|define\s+\w+|node\s+['"]?\w+['"]?/i.test(f.content) ||
-      /package\s*{|service\s*{|file\s*{|exec\s*{|user\s*{|group\s*{/i.test(f.content) ||
-      /ensure\s*=>|require\s*=>|before\s*=>|notify\s*=>|subscribe\s*=>/i.test(f.content)
-    )) {
-      return "puppet";
-    }
-    
-    // Check for Ansible playbooks/roles first
-    if (files.some(f => 
-      f.path.endsWith('.yml') || 
-      f.path.endsWith('.yaml') ||
-      f.path.includes('playbook') ||
-      f.path.includes('roles/') ||
-      f.path.includes('ansible') ||
-      /- name:|hosts:|tasks:|vars:|become:/i.test(f.content) ||
-      /ansible\.builtin\.|community\.|ansible\.posix\./i.test(f.content) ||
-      /register:|when:|with_items:|loop:|include:|import_/i.test(f.content) ||
-      /gather_facts:|remote_user:|connection:/i.test(f.content)
-    )) {
-      return "ansible-upgrade";
-    }
-    
-    // Check for Salt states
-    if (files.some(f => 
-      f.path.endsWith('.sls') || 
-      f.path.includes('salt') ||
-      /pkg\.installed|service\.running|file\.managed|cmd\.run/i.test(f.content) ||
-      /salt:\/\/|pillar\[|grains\[/i.test(f.content)
-    )) {
-      return "salt";
-    }
-    
-    // Check for shell scripts
-    if (files.some(f => 
-      f.path.endsWith('.sh') || 
-      f.path.endsWith('.bash') || 
-      f.path.endsWith('.zsh') || 
-      f.content.startsWith('#!/bin/bash') ||
-      f.content.startsWith('#!/bin/sh') ||
-      f.content.startsWith('#!/usr/bin/bash') ||
-      f.content.startsWith('#!/bin/zsh') ||
-      /^#!/.test(f.content) // Any shebang
-    )) {
-      return "shell";
-    }
-    
-    // Check for BladeLogic
-    if (files.some(f => 
-      f.path.includes('bladelogic') || 
-      /bladelogic|rscd|nsh|blcli/i.test(f.content)
-    )) {
-      return "bladelogic";
-    }
-    
-    // Default to chef
-    return "chef";
-  };
-
-  // UPDATED: Main analysis trigger with puppet support
-  const handleManualClassify = useCallback((files?: { path: string; content: string }[], technology?: string) => {
+  // UPDATED: Main analysis trigger - Chef only
+  const handleManualClassify = useCallback((files?: { path: string; content: string }[]) => {
     if (loading) {
       addLogMessage("Analysis already in progress");
       return;
     }
-    let detectedTech: "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade" = technologyType;
     let filesObj: Record<string, string> = {};
 
     if (files && files.length > 0) {
@@ -330,36 +265,22 @@ function RunWorkflowPageInner() {
       setAnalysisFiles(filesObj);
       addLogMessage(`Selected ${files.length} files: ${Object.keys(filesObj).join(", ")}`);
       addLogMessage(`Total size: ${Object.values(filesObj).reduce((sum, c) => sum + c.length, 0)} characters`);
-      detectedTech = (technology as "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade") || detectTechnologyType(files);
-      setTechnologyType(detectedTech);
+      setTechnologyType("chef");
     } else if (code.trim()) {
       const fileName = selectedFile || selectedGitFile || "uploaded_file";
       filesObj = { [fileName]: code };
       setAnalysisFiles(filesObj);
       addLogMessage(`Starting single file analysis...`);
-      detectedTech = (technology as "chef" | "bladelogic" | "puppet" | "shell" | "salt" | "ansible-upgrade") || detectTechnologyType([{ path: fileName, content: code }]);
-      setTechnologyType(detectedTech);
+      setTechnologyType("chef");
     } else {
       addLogMessage("No code loaded. Please select or upload a file first");
       return;
     }
     
-    // Route to appropriate analysis including puppet
-    if (detectedTech === "puppet") {
-      console.log('🎭 Routing to Puppet analysis with filesObj:', filesObj);
-      analysePuppet(filesObj);
-    } else if (detectedTech === "ansible-upgrade") {
-      analyseAnsibleUpgrade(filesObj);
-    } else if (detectedTech === "salt") {
-      analyseSalt(filesObj);
-    } else if (detectedTech === "shell") {
-      analyseShell(filesObj);
-    } else if (detectedTech === "bladelogic") {
-      analyseBladeLogic(filesObj);
-    } else {
-      analyseChef(filesObj);
-    }
-  }, [loading, addLogMessage, code, analyseChef, analyseBladeLogic, analysePuppet, analyseShell, analyseSalt, analyseAnsibleUpgrade, selectedFile, selectedGitFile, technologyType]);
+    // Always route to Chef analysis
+    console.log('👨‍🍳 Routing to Chef analysis with filesObj:', filesObj);
+    analyseChef(filesObj);
+  }, [loading, addLogMessage, code, analyseChef, selectedFile, selectedGitFile, technologyType]);
 
   // Mark Convert step completed when playbook is generated
   const handleGenerateComplete = useCallback((playbook: string) => {
@@ -562,7 +483,7 @@ function RunWorkflowPageInner() {
             />
           ) : step === 3 ? (
             <>
-              {console.log("[RunPage] ValidationPanel props:", { validationProfile, generatedPlaybookLength: generatedPlaybook?.length })}
+              {/* console.log("[RunPage] ValidationPanel props:", { validationProfile, generatedPlaybookLength: generatedPlaybook?.length }) */}
               <ValidationPanel
                 playbook={generatedPlaybook}
                 validationConfig={validationConfig}
@@ -600,7 +521,6 @@ function RunWorkflowPageInner() {
               result={analysisResult}
               loading={loading}
               error={null}
-              technologyType={technologyType}
             />
           )}
         </div>

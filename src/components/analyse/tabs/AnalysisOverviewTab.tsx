@@ -69,61 +69,38 @@ export const AnalysisOverviewTab: React.FC<AnalysisOverviewTabProps> = ({ result
       });
     }
 
-    // NEW: Puppet-specific metrics
-    if (result.puppet_resources?.total_resources) {
-      metrics.push({
-        label: 'Puppet Resources',
-        value: result.puppet_resources.total_resources.toString(),
-        icon: Target,
-        color: 'text-orange-400',
-        description: 'Resources Detected'
-      });
-    }
 
-    // NEW: Puppet resource types breakdown
-    if (result.puppet_resources?.resource_types && Object.keys(result.puppet_resources.resource_types).length > 0) {
-      const resourceTypes = Object.keys(result.puppet_resources.resource_types);
-      const totalTypes = resourceTypes.length;
-      
-      metrics.push({
-        label: 'Resource Types',
-        value: `${totalTypes}`,
-        icon: Database,
-        color: 'text-cyan-400',
-        description: totalTypes === 1 ? 'Type' : 'Types'
-      });
-    }
 
-    // Complexity Score - only if provided by tree-sitter
-    if (result.tree_sitter_facts?.complexity_score !== undefined) {
+    // Complexity Score - only if provided by pattern_analyzer_facts
+    if (result.pattern_analyzer_facts?.complexity_score !== undefined) {
       metrics.push({
         label: 'Complexity Score',
-        value: result.tree_sitter_facts.complexity_score.toString(),
+        value: result.pattern_analyzer_facts.complexity_score.toString(),
         icon: Target,
         color: 'text-orange-400',
         description: 'Static Analysis'
       });
     }
 
-    // Syntax Success Rate - only if provided by tree-sitter
-    if (result.tree_sitter_facts?.syntax_success_rate !== undefined) {
+    // Syntax Success Rate - only if provided by pattern_analyzer_facts
+    if (result.pattern_analyzer_facts?.syntax_success_rate !== undefined) {
       metrics.push({
         label: 'Syntax Success',
-        value: `${result.tree_sitter_facts.syntax_success_rate}%`,
+        value: `${result.pattern_analyzer_facts.syntax_success_rate}%`,
         icon: Target,
         color: 'text-green-400',
         description: 'Parser Success'
       });
     }
 
-    // Total Resources - only if provided by tree-sitter
-    if (result.tree_sitter_facts?.total_resources !== undefined) {
+    // Total Resources - only if provided by pattern_analyzer_facts
+    if (result.pattern_analyzer_facts?.total_resources !== undefined) {
       metrics.push({
         label: 'Resources Found',
-        value: result.tree_sitter_facts.total_resources.toString(),
+        value: result.pattern_analyzer_facts.total_resources.toString(),
         icon: Database,
-        color: 'text-orange-400',
-        description: 'Detected'
+        color: 'text-purple-400',
+        description: 'Chef Resources'
       });
     }
 
@@ -199,10 +176,10 @@ export const AnalysisOverviewTab: React.FC<AnalysisOverviewTabProps> = ({ result
         </div>
       )}
 
-      {/* Backend Verification - Only if tree_sitter provides meaningful verification data */}
-      {(hasBackendData(result.tree_sitter_facts?.verified_cookbook_name) || 
-        hasBackendData(result.tree_sitter_facts?.verified_version) || 
-        result.tree_sitter_facts?.has_metadata === true) && (
+      {/* Code Verification - Only if pattern_analyzer_facts provides meaningful verification data */}
+      {(hasBackendData(result.pattern_analyzer_facts?.extracted_cookbook_name) || 
+        hasBackendData(result.pattern_analyzer_facts?.extracted_version) || 
+        result.pattern_analyzer_facts?.has_metadata === true) && (
         <div>
           <h3 className="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
             <Target size={18} className="text-emerald-400" />
@@ -211,25 +188,25 @@ export const AnalysisOverviewTab: React.FC<AnalysisOverviewTabProps> = ({ result
           <div className="relative overflow-hidden rounded-xl border border-gray-600/30 bg-gradient-to-br from-gray-800/40 to-gray-900/40 backdrop-blur-sm shadow-lg p-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              {hasBackendData(result.tree_sitter_facts?.verified_cookbook_name) && (
+              {hasBackendData(result.pattern_analyzer_facts?.extracted_cookbook_name) && (
                 <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
-                  <div className="text-xs text-gray-500 mb-1">Verified Name</div>
+                  <div className="text-xs text-gray-500 mb-1">Cookbook Name</div>
                   <div className="text-gray-300 text-sm font-semibold">
-                    {result.tree_sitter_facts?.verified_cookbook_name}
+                    {result.pattern_analyzer_facts?.extracted_cookbook_name}
                   </div>
                 </div>
               )}
               
-              {hasBackendData(result.tree_sitter_facts?.verified_version) && (
+              {hasBackendData(result.pattern_analyzer_facts?.extracted_version) && (
                 <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
-                  <div className="text-xs text-gray-500 mb-1">Verified Version</div>
+                  <div className="text-xs text-gray-500 mb-1">Version</div>
                   <div className="text-gray-300 text-sm font-mono">
-                    {result.tree_sitter_facts?.verified_version}
+                    {result.pattern_analyzer_facts?.extracted_version}
                   </div>
                 </div>
               )}
               
-              {result.tree_sitter_facts?.has_metadata === true && (
+              {result.pattern_analyzer_facts?.has_metadata === true && (
                 <div className="bg-gray-900/50 rounded-lg p-3 border border-gray-700/30">
                   <div className="text-xs text-gray-500 mb-1">Metadata Available</div>
                   <div className="text-sm font-semibold text-green-400">

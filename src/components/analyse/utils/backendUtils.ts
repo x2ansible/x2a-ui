@@ -197,40 +197,46 @@ export const getMigrationInfo = (result: BackendAnalysisResponse) => {
   return { effort, hours, display, color };
 };
 
-// Complexity from backend - UPDATED to handle Puppet with proper colors
+// Complexity from backend - UPDATED to use pattern_analyzer_facts for Chef
 export const getComplexityInfo = (result: BackendAnalysisResponse) => {
-  // Check for Puppet-specific complexity
+  // Check for Chef pattern analyzer complexity (primary)
+  const patternScore = result.pattern_analyzer_facts?.complexity_score;
+  if (patternScore !== undefined) {
+    const level = patternScore > 15 ? 'HIGH' : patternScore > 8 ? 'MEDIUM' : 'LOW';
+    const color = level === 'HIGH' ? 'text-red-400' : level === 'MEDIUM' ? 'text-yellow-400' : 'text-green-400';
+    return { 
+      source: 'pattern-analyzer', 
+      score: patternScore, 
+      level, 
+      display: `${level} (${patternScore})`,
+      color: color
+    };
+  }
+  
+  // Fallback to LLM complexity level
   if (result?.complexity_level) {
     const level = result.complexity_level.toUpperCase();
-    let color = 'text-gray-400'; // default
-    
-    // Add proper color mapping for Puppet complexity
-    if (level === 'LOW') {
-      color = 'text-green-400';
-    } else if (level === 'MEDIUM') {
-      color = 'text-yellow-400';
-    } else if (level === 'HIGH') {
-      color = 'text-red-400';
-    }
-    
+    const color = level === 'HIGH' ? 'text-red-400' : level === 'MEDIUM' ? 'text-yellow-400' : 'text-green-400';
     return { 
-      source: 'puppet', 
+      source: 'llm', 
       level: level, 
       display: level,
       color: color
     };
   }
   
+  // Legacy fallback to tree_sitter_facts (for backward compatibility)
   const treeScore = result.tree_sitter_facts?.complexity_score;
-  const llmLevel = result.complexity_level;
-  
   if (treeScore !== undefined) {
     const level = treeScore > 15 ? 'HIGH' : treeScore > 8 ? 'MEDIUM' : 'LOW';
-    return { source: 'tree-sitter', score: treeScore, level, display: `${level} (${treeScore})` };
-  }
-  
-  if (llmLevel) {
-    return { source: 'llm', level: llmLevel.toUpperCase(), display: llmLevel };
+    const color = level === 'HIGH' ? 'text-red-400' : level === 'MEDIUM' ? 'text-yellow-400' : 'text-green-400';
+    return { 
+      source: 'tree-sitter', 
+      score: treeScore, 
+      level, 
+      display: `${level} (${treeScore})`,
+      color: color
+    };
   }
   
   return null;
@@ -269,6 +275,40 @@ export const formatArray = (arr: string[] | unknown | undefined, limit: number =
     const arrayValues = Object.values(obj).filter(v => Array.isArray(v));
     if (arrayValues.length > 0) {
       return formatArray(arrayValues[0] as string[], limit);
+    }
+    // Convert object keys to comma-separated string
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return 'None';
+    if (keys.length <= limit) return keys.join(', ');
+    return `${keys.slice(0, limit).join(', ')} (+${keys.length - limit} more)`;
+  }
+  
+  // Handle string input
+  if (typeof arr === 'string') return arr;
+  
+  return 'None';
+};
+
+// NEW: Deduplicate and format arrays for display
+export const formatDeduplicatedArray = (arr: string[] | unknown | undefined, limit: number = 3): string => {
+  // Handle array input
+  if (Array.isArray(arr)) {
+    if (arr.length === 0) return 'None';
+    
+    // Deduplicate the array
+    const uniqueItems = [...new Set(arr)];
+    
+    if (uniqueItems.length === 0) return 'None';
+    if (uniqueItems.length <= limit) return uniqueItems.join(', ');
+    return `${uniqueItems.slice(0, limit).join(', ')} (+${uniqueItems.length - limit} more)`;
+  }
+  
+  // Handle object that might contain arrays
+  if (typeof arr === 'object' && arr !== null) {
+    const obj = arr as Record<string, unknown>;
+    const arrayValues = Object.values(obj).filter(v => Array.isArray(v));
+    if (arrayValues.length > 0) {
+      return formatDeduplicatedArray(arrayValues[0] as string[], limit);
     }
     // Convert object keys to comma-separated string
     const keys = Object.keys(obj);

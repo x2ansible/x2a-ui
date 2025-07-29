@@ -216,9 +216,9 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
     try {
       logMessage(`🚀 Starting enhanced validation with ${selectedProfile} profile...`);
       logMessage(`🔍 Debug: selectedProfile prop = "${selectedProfile}"`);
-      console.log("[ValidationPanel] Starting validation with profile:", selectedProfile);
-      console.log("[ValidationPanel] selectedProfile type:", typeof selectedProfile);
-      console.log("[ValidationPanel] selectedProfile === 'basic':", selectedProfile === 'basic');
+      // console.log("[ValidationPanel] Starting validation with profile:", selectedProfile);
+      // console.log("[ValidationPanel] selectedProfile type:", typeof selectedProfile);
+      // console.log("[ValidationPanel] selectedProfile === 'basic':", selectedProfile === 'basic');
       setProgress("Connecting to validation service...");
       
       const cleanedPlaybook = playbook.trim();
@@ -229,8 +229,8 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({
       };
       
       logMessage(`🔍 Debug: Request body = ${JSON.stringify(requestBody, null, 2)}`);
-      console.log("[ValidationPanel] Request body being sent:", requestBody);
-      console.log("[ValidationPanel] selectedProfile in request:", selectedProfile);
+      // console.log("[ValidationPanel] Request body being sent:", requestBody);
+      // console.log("[ValidationPanel] selectedProfile in request:", selectedProfile);
       
       const response = await fetch("/api/validate/playbook/stream", {
         method: "POST",

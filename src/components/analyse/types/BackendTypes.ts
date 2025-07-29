@@ -6,6 +6,14 @@ export interface BackendAnalysisResponse {
   description?: string | object;
   analysis_summary?: string;
   
+  // NEW: Chef-specific fields from backend response
+  cookbook_name?: string;
+  configuration_details?: string;
+  convertible?: boolean;
+  conversion_notes?: string;
+  confidence_source?: string;
+  analysis_method?: string;
+  
   // Agent and session metadata
   metadata?: {
     agent_name?: string;
@@ -18,10 +26,16 @@ export interface BackendAnalysisResponse {
     analyzed_at?: string;
   };
   
+  // UPDATED: Enhanced session_info with new fields from backend
   session_info?: {
+    agent_id?: string;
     session_id?: string;
     correlation_id?: string;
+    method_used?: string;
+    pattern_analyzer_enabled?: boolean;
+    pattern_analyzer_working?: boolean;
     analysis_time_seconds?: number;
+    cookbook_name?: string;
   };
   
   // Timing information
@@ -43,6 +57,21 @@ export interface BackendAnalysisResponse {
   
   // Complexity assessment
   complexity_level?: string;
+  
+  // UPDATED: Replace tree_sitter_facts with pattern_analyzer_facts
+  pattern_analyzer_facts?: {
+    complexity_score?: number;
+    syntax_success_rate?: number;
+    total_resources?: number;
+    extracted_cookbook_name?: string;
+    extracted_version?: string;
+    has_metadata?: boolean;
+    extraction_method?: string;
+    ast_available?: boolean;
+    pattern_fallback_used?: boolean;
+  };
+  
+  // DEPRECATED: Keep for backward compatibility but mark as deprecated
   tree_sitter_facts?: {
     complexity_score?: number;
     syntax_success_rate?: number;

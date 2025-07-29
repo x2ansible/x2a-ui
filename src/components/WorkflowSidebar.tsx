@@ -87,12 +87,12 @@ export default function WorkflowSidebar(props: WorkflowSidebarProps) {
   // Technology options - UPDATED: Added Ansible Upgrade support
   const technologies = [
     { id: "chef", name: "Chef", icon: "👨‍🍳", description: "Chef cookbooks and recipes" },
-    { id: "bladelogic", name: "BladeLogic", icon: "⚔️", description: "BMC BladeLogic automation" },
-    { id: "puppet", name: "Puppet", icon: "🎭", description: "Puppet manifests and modules" },
-    { id: "shell", name: "Shell Scripts", icon: "🐚", description: "Shell scripts and automation" },
-    { id: "salt", name: "Salt", icon: "🧂", description: "SaltStack states and formulas" },
-    { id: "ansible-upgrade", name: "Ansible Upgrade", icon: "🔄", description: "Upgrade existing Ansible code" },
-    { id: "terraform", name: "Terraform", icon: "🏗️", description: "Terraform configurations" }
+    // { id: "bladelogic", name: "BladeLogic", icon: "⚔️", description: "BMC BladeLogic automation" },
+    // { id: "puppet", name: "Puppet", icon: "🎭", description: "Puppet manifests and modules" },
+    // { id: "shell", name: "Shell Scripts", icon: "🐚", description: "Shell scripts and automation" },
+    // { id: "salt", name: "Salt", icon: "🧂", description: "SaltStack states and formulas" },
+    // { id: "ansible-upgrade", name: "Ansible Upgrade", icon: "🔄", description: "Upgrade existing Ansible code" },
+    // { id: "terraform", name: "Terraform", icon: "🏗️", description: "Terraform configurations" }
   ];
 
   // Handle multi-file analyze with technology selection
