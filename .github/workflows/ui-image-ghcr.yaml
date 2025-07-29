@@ -1,8 +1,8 @@
-name: Build & Publish UI Image to GHCR
+name: Build & Publish Chef UI Image to GHCR
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, chef ]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   ORG: x2ansible
-  IMAGE_NAME: x2a-ui # 👈 UI image, not api
+  IMAGE_NAME: x2a-ui-chef # 👈 Chef-specific UI image name
 
 jobs:
   build-and-push:
@@ -37,6 +37,12 @@ jobs:
           BUILD_NUMBER=$(git rev-list --count HEAD)
           SEMANTIC_VERSION="${DATE_TAG}.${BUILD_NUMBER}"
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+          
+          # Add branch-specific tag if not on main
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            BRANCH_TAG="${{ github.ref_name }}"
+            echo "BRANCH_TAG=${BRANCH_TAG}" >> $GITHUB_OUTPUT
+          fi
 
           echo "DATE_TAG=${DATE_TAG}" >> $GITHUB_OUTPUT
           echo "SHORT_SHA=${SHORT_SHA}" >> $GITHUB_OUTPUT
@@ -52,9 +58,21 @@ jobs:
 
       - name: Build image and tag
         run: |
+          # Base tags for all builds
+          TAGS="-t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:latest"
+          TAGS="$TAGS -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SEMANTIC_VERSION }}"
+          TAGS="$TAGS -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.DATE_TAG }}"
+          TAGS="$TAGS -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SHORT_SHA }}"
+          TAGS="$TAGS -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:build-${{ steps.version.outputs.BUILD_NUMBER }}"
+          
+          # Add branch-specific tag if not on main
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            TAGS="$TAGS -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+          fi
+          
           podman build \
             --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
-            --label "org.opencontainers.image.description=UI frontend for x2ansible" \
+            --label "org.opencontainers.image.description=Chef-specific UI frontend for x2ansible" \
             --label "org.opencontainers.image.url=https://github.com/${{ github.repository }}" \
             --label "org.opencontainers.image.documentation=https://github.com/${{ github.repository }}" \
             --label "org.opencontainers.image.version=${{ steps.version.outputs.SEMANTIC_VERSION }}" \
@@ -63,11 +81,8 @@ jobs:
             --label "org.opencontainers.image.licenses=MIT" \
             --label "org.opencontainers.image.vendor=${{ env.ORG }}" \
             --label "org.opencontainers.image.title=${{ env.IMAGE_NAME }}" \
-            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:latest \
-            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SEMANTIC_VERSION }} \
-            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.DATE_TAG }} \
-            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SHORT_SHA }} \
-            -t ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:build-${{ steps.version.outputs.BUILD_NUMBER }} \
+            --label "org.opencontainers.image.ref.name=${{ github.ref_name }}" \
+            $TAGS \
             -f Containerfile .
 
       - name: Push all image tags
@@ -77,15 +92,26 @@ jobs:
           podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.DATE_TAG }}
           podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SHORT_SHA }}
           podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:build-${{ steps.version.outputs.BUILD_NUMBER }}
+          # Push branch-specific tag if not on main
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            podman push ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          fi
 
       - name: Final info & usage summary
         run: |
           echo "🔗 Make image public: https://github.com/orgs/${{ env.ORG }}/packages/container/${{ env.IMAGE_NAME }}/settings"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "📦 Image: ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}"
+          echo ""
+          echo "📥 Pull commands:"
           echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:latest"
           echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SEMANTIC_VERSION }}"
           echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.DATE_TAG }}"
           echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.SHORT_SHA }}"
           echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:build-${{ steps.version.outputs.BUILD_NUMBER }}"
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "podman pull ${{ env.REGISTRY }}/${{ env.ORG }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+          fi
 
       - name: Test public pull (optional)
         continue-on-error: true
