@@ -167,6 +167,10 @@ const LintInspector = () => {
 
                 if (data.type === "progress" && data.message) {
                   setProgress(data.message);
+                } else if (data.type === "result" && data.data) {
+                  setValidationResult(data.data);
+                  setProgress(null);
+                  return;
                 } else if (data.type === "final_result" && data.data) {
                   setValidationResult(data.data);
                   setProgress(null);

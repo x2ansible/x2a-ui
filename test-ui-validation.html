@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Validation Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 5px;
+        }
+        .log {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #00ff00;
+            color: #000;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.success { background: #004400; border: 1px solid #00ff00; }
+        .status.error { background: #440000; border: 1px solid #ff0000; }
+        .status.info { background: #004444; border: 1px solid #00ffff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 UI Validation Request Test</h1>
+        <p>This test simulates the exact same requests the UI sends to verify if multiple requests are being sent.</p>
+        
+        <div class="test-section">
+            <h3>Single Request Test</h3>
+            <button onclick="runSingleTest()" id="singleBtn">Run Single Request Test</button>
+            <div id="singleStatus" class="status info">Ready to test</div>
+            <div id="singleLog" class="log"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Multiple Requests Test</h3>
+            <button onclick="runMultipleTest()" id="multipleBtn">Run Multiple Requests Test</button>
+            <div id="multipleStatus" class="status info">Ready to test</div>
+            <div id="multipleLog" class="log"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Rapid Click Test (Simulates UI Behavior)</h3>
+            <button onclick="runRapidClickTest()" id="rapidBtn">Run Rapid Click Test</button>
+            <div id="rapidStatus" class="status info">Ready to test</div>
+            <div id="rapidLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const playbookContent = `---
+- name: Playbook with relative paths
+  hosts: localhost
+  tasks:
+    - name: Copy a file using a relative path
+      ansible.builtin.copy:
+        src: ../some_files/my_config.conf
+        dest: /etc/my_config.conf
+
+    - name: Template a file using a relative path
+      ansible.builtin.template:
+        src: ../some_templates/my_template.j2
+        dest: /tmp/output.txt
+`;
+
+        const requestBody = {
+            playbook_content: playbookContent,
+            profile: "basic"
+        };
+
+        let requestCount = 0;
+        let activeRequests = 0;
+
+        function log(elementId, message) {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            element.textContent += `[${timestamp}] ${message}\n`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        async function makeValidationRequest(testName, logElementId, statusElementId) {
+            requestCount++;
+            activeRequests++;
+            const requestId = requestCount;
+            
+            log(logElementId, `📤 Request ${requestId} started (Active: ${activeRequests})`);
+            updateStatus(statusElementId, `Request ${requestId} in progress...`, 'info');
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/validate/playbook/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream',
+                    },
+                    body: JSON.stringify(requestBody),
+                });
+
+                log(logElementId, `📥 Request ${requestId} - Status: ${response.status}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(logElementId, `❌ Request ${requestId} failed: ${errorText}`);
+                    updateStatus(statusElementId, `Request ${requestId} failed`, 'error');
+                    return;
+                }
+
+                const contentType = response.headers.get('content-type');
+                log(logElementId, `📥 Request ${requestId} - Content-Type: ${contentType}`);
+
+                if (contentType?.includes('text/event-stream')) {
+                    log(logElementId, `📊 Request ${requestId} - Processing streaming response...`);
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let eventCount = 0;
+
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            
+                            if (done) {
+                                log(logElementId, `📊 Request ${requestId} - Stream reading completed`);
+                                break;
+                            }
+                            
+                            if (!value) continue;
+                            
+                            buffer += decoder.decode(value, { stream: true });
+                            
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop() || '';
+                            
+                            for (const line of lines) {
+                                const trimmedLine = line.trim();
+                                if (!trimmedLine) continue;
+                                
+                                eventCount++;
+                                
+                                if (trimmedLine.startsWith('data: ')) {
+                                    const dataStr = trimmedLine.slice(6);
+                                    if (dataStr === '[DONE]') {
+                                        log(logElementId, `📊 Request ${requestId} - Received [DONE] signal`);
+                                        break;
+                                    }
+                                    
+                                    try {
+                                        const data = JSON.parse(dataStr);
+                                        
+                                        if (data.type === 'result' && data.data) {
+                                            log(logElementId, `✅ Request ${requestId} - Received validation result (Passed: ${data.data.passed}, Issues: ${data.data.issues_count})`);
+                                            updateStatus(statusElementId, `Request ${requestId} completed successfully`, 'success');
+                                            return;
+                                        }
+                                    } catch (parseError) {
+                                        log(logElementId, `⚠️ Request ${requestId} - Failed to parse: ${trimmedLine}`);
+                                    }
+                                }
+                            }
+                        }
+                    } finally {
+                        try {
+                            reader.releaseLock();
+                        } catch (lockError) {
+                            log(logElementId, `⚠️ Request ${requestId} - Error releasing reader lock: ${lockError}`);
+                        }
+                    }
+                } else {
+                    log(logElementId, `📊 Request ${requestId} - Processing JSON response...`);
+                    const data = await response.json();
+                    log(logElementId, `✅ Request ${requestId} - Received JSON response`);
+                    updateStatus(statusElementId, `Request ${requestId} completed successfully`, 'success');
+                }
+
+            } catch (error) {
+                log(logElementId, `❌ Request ${requestId} - Error: ${error.message}`);
+                updateStatus(statusElementId, `Request ${requestId} failed: ${error.message}`, 'error');
+            } finally {
+                activeRequests--;
+                log(logElementId, `📊 Request ${requestId} finished (Active: ${activeRequests})`);
+            }
+        }
+
+        async function runSingleTest() {
+            const btn = document.getElementById('singleBtn');
+            const logElement = 'singleLog';
+            const statusElement = 'singleStatus';
+            
+            btn.disabled = true;
+            log(logElement, '🧪 Starting single request test...');
+            updateStatus(statusElement, 'Running single request test...', 'info');
+            
+            await makeValidationRequest('Single', logElement, statusElement);
+            
+            btn.disabled = false;
+            log(logElement, '✅ Single request test completed');
+        }
+
+        async function runMultipleTest() {
+            const btn = document.getElementById('multipleBtn');
+            const logElement = 'multipleLog';
+            const statusElement = 'multipleStatus';
+            
+            btn.disabled = true;
+            log(logElement, '🧪 Starting multiple requests test...');
+            updateStatus(statusElement, 'Running multiple requests test...', 'info');
+            
+            const promises = [];
+            for (let i = 1; i <= 3; i++) {
+                log(logElement, `📤 Starting request ${i}...`);
+                promises.push(makeValidationRequest(`Multiple-${i}`, logElement, statusElement));
+                
+                // Small delay between requests
+                if (i < 3) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+            
+            try {
+                await Promise.all(promises);
+                log(logElement, '✅ All multiple requests completed');
+                updateStatus(statusElement, 'All multiple requests completed successfully', 'success');
+            } catch (error) {
+                log(logElement, `❌ Some multiple requests failed: ${error}`);
+                updateStatus(statusElement, 'Some multiple requests failed', 'error');
+            }
+            
+            btn.disabled = false;
+        }
+
+        async function runRapidClickTest() {
+            const btn = document.getElementById('rapidBtn');
+            const logElement = 'rapidLog';
+            const statusElement = 'rapidStatus';
+            
+            btn.disabled = true;
+            log(logElement, '🧪 Starting rapid click test (simulates UI behavior)...');
+            updateStatus(statusElement, 'Running rapid click test...', 'info');
+            
+            // Simulate rapid clicking (like a user clicking multiple times quickly)
+            const promises = [];
+            for (let i = 1; i <= 5; i++) {
+                log(logElement, `📤 Rapid click ${i}...`);
+                promises.push(makeValidationRequest(`Rapid-${i}`, logElement, statusElement));
+                
+                // Very small delay to simulate rapid clicking
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            try {
+                await Promise.all(promises);
+                log(logElement, '✅ All rapid click requests completed');
+                updateStatus(statusElement, 'All rapid click requests completed', 'success');
+            } catch (error) {
+                log(logElement, `❌ Some rapid click requests failed: ${error}`);
+                updateStatus(statusElement, 'Some rapid click requests failed', 'error');
+            }
+            
+            btn.disabled = false;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            log('singleLog', 'Ready to test single request...');
+            log('multipleLog', 'Ready to test multiple requests...');
+            log('rapidLog', 'Ready to test rapid clicking...');
+        });
+    </script>
+</body>
+</html> 

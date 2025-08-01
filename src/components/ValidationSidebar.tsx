@@ -203,15 +203,25 @@ const ValidationSidebar: React.FC<ValidationSidebarProps> = ({
           )}
 
           {/* Validation Results Summary */}
-                      {validationResult && !loading && (
+          {validationResult && !loading && (
             <div className="grid grid-cols-2 gap-2 mt-3">
               <div className="text-center p-2 bg-slate-800/50 rounded">
-                <div className="text-lg font-bold text-purple-400">{(validationResult.summary as any)?.fixes_applied || 0}</div>
-                <div className="text-xs text-slate-400">Fixes</div>
+                <div className="text-lg font-bold text-purple-400">
+                  {(validationResult.summary as any)?.fixes_applied || 
+                   (validationResult.summary as any)?.violations || 0}
+                </div>
+                <div className="text-xs text-slate-400">
+                  {(validationResult.summary as any)?.fixes_applied !== undefined ? 'Fixes' : 'Violations'}
+                </div>
               </div>
               <div className="text-center p-2 bg-slate-800/50 rounded">
-                <div className="text-lg font-bold text-blue-400">{(validationResult.summary as any)?.lint_iterations || 0}</div>
-                <div className="text-xs text-slate-400">Checks</div>
+                <div className="text-lg font-bold text-blue-400">
+                  {(validationResult.summary as any)?.lint_iterations || 
+                   (validationResult.summary as any)?.total_issues || 0}
+                </div>
+                <div className="text-xs text-slate-400">
+                  {(validationResult.summary as any)?.lint_iterations !== undefined ? 'Checks' : 'Issues'}
+                </div>
               </div>
             </div>
           )}

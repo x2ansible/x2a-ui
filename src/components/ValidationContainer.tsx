@@ -56,7 +56,7 @@ const ValidationContainer: React.FC<ValidationContainerProps> = ({
   const [streamingActive, setStreamingActive] = useState(false);
   const [currentStep] = useState<CurrentStep | null>(null);
   const [totalSteps] = useState(0);
-  const [selectedProfile, setSelectedProfile] = useState('production');
+  const [selectedProfile, setSelectedProfile] = useState('basic'); // Changed from 'production' to 'basic'
   const [, setLogs] = useState<string[]>([]);
 
   // Logging helper
@@ -95,13 +95,12 @@ const ValidationContainer: React.FC<ValidationContainerProps> = ({
     }
   }, [logMessage]);
 
-
-
   return (
     <div className="flex h-full bg-slate-900">
       {/* Sidebar */}
       <div className="w-80 border-r border-slate-700 bg-slate-800">
         <ValidationSidebar
+          playbook={playbook} // Add missing playbook prop
           validationConfig={validationConfig}
           setValidationConfig={(config: unknown) => {
             setValidationConfig(config as ValidationConfig);
@@ -110,6 +109,8 @@ const ValidationContainer: React.FC<ValidationContainerProps> = ({
           loading={validationLoading}
           selectedProfile={selectedProfile}
           onProfileChange={setSelectedProfile}
+          onLogMessage={logMessage} // Add missing prop
+          onValidationComplete={handleValidationComplete} // Add missing prop
           streamingActive={streamingActive}
           currentStep={currentStep || undefined}
           totalSteps={totalSteps}
@@ -121,7 +122,7 @@ const ValidationContainer: React.FC<ValidationContainerProps> = ({
         <ValidationPanel
           playbook={playbook}
           validationConfig={validationConfig}
-          selectedProfile={selectedProfile}
+          selectedProfile={selectedProfile} // FIX: Add missing selectedProfile prop
           onLogMessage={logMessage}
           onValidationComplete={handleValidationComplete}
         />

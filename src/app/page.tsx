@@ -17,44 +17,6 @@ const workflows = [
     buttonColor: "from-blue-500 via-cyan-500 to-sky-500",
     comingSoon: false,
   },
-
-  {
-    key: "DevSecOps",
-    title: "Artifact Promotion Validation (Guided)",
-    description:
-      "Validate the origin of artifacts, and ensure that it is signed and accompanied by provenance attestations before promoting it for pre-production.",
-    icon: <Sparkles className="w-10 h-10 text-cyan-400 drop-shadow-glow" />,
-    cardColor: "from-cyan-900/80 to-cyan-700/60 border-cyan-400/50 shadow-cyan-500/30",
-    buttonColor: "from-cyan-500 via-blue-500 to-sky-400",
-    comingSoon: true,
-    soonContent: (
-      <>
-        <h2 className="text-2xl font-bold text-white mb-2">Coming Soon: Ansible Newbie (Guided)</h2>
-        <p className="text-slate-300 text-center mb-4">
-          Validate the origin of artifacts, and ensure that it is signed and accompanied by provenance attestations before promoting it for pre-production.!
-        </p>
-      </>
-    ),
-  },
-
-  {
-    key: "Architect",
-    title: "Automation Architect",
-    description:
-      "Design and visualize complex workflows. Collaborate with team members, plan dependencies",
-    icon: <Wrench className="w-10 h-10 text-emerald-400 drop-shadow-glow" />,
-    cardColor: "from-green-900/80 to-green-700/60 border-emerald-400/50 shadow-emerald-500/30",
-    buttonColor: "from-emerald-500 via-green-500 to-cyan-400",
-    comingSoon: true,
-    soonContent: (
-      <>
-        <h2 className="text-2xl font-bold text-white mb-2">Coming Soon: Automation Architect</h2>
-        <p className="text-slate-300 text-center mb-4">
-          Collaboratively design and test automation with human expertise and transparent, trustworthy AI suggestions.
-        </p>
-      </>
-    ),
-  },
 ];
 
 export default function Page() {
@@ -98,37 +60,20 @@ export default function Page() {
       <div className="w-full max-w-7xl mx-auto flex flex-col items-center gap-6 px-2 pt-10 pb-12">
         {/* Headline */}
         <h1 className="text-4xl md:text-5xl font-black text-center bg-gradient-to-r from-blue-400 via-fuchsia-400 to-cyan-400 bg-[length:200%_auto] bg-clip-text text-transparent animate-gradient-wave mb-2 tracking-tight drop-shadow-md">
-          Agentic Workflows
+          Infra as Code
         </h1>
-        {/* Marquee Subtitle */}
-        <div
-          className="w-full flex justify-center mt-1 mb-7 select-none"
-          style={{ minHeight: '2.7em', position: "relative", overflow: "hidden" }}
-        >
-          <div
-            className={`
-              whitespace-nowrap text-lg md:text-xl text-slate-300 font-medium max-w-2xl
-              opacity-0 animate-subtitle-fadein
-              subtitle-marquee
-            `}
-            style={{
-              animation: "subtitle-fadein 1.2s cubic-bezier(.61,0,.44,1) forwards, marquee-scroll 19s linear 1.2s infinite"
-            }}
-            tabIndex={-1}
-          >
-            Agentic automation—where your decisions guide every step.
-            <span className="mx-2" />
-            Pick a workflow and stay in control—AI supports, you decide.
-          </div>
-        </div>
+
         {/* Responsive, compact cards grid */}
         <div
-          className="w-full grid gap-6 sm:gap-7 md:gap-8"
-          style={{
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            display: 'grid'
-          }}
+          className="w-full flex justify-center"
         >
+          <div
+            className="grid gap-6 sm:gap-7 md:gap-8"
+            style={{
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 400px))',
+              display: 'grid'
+            }}
+          >
           {workflows.map((wf, idx) => (
             <div
               key={wf.key}
@@ -172,6 +117,7 @@ export default function Page() {
               )}
             </div>
           ))}
+          </div>
         </div>
       </div>
       {/* Sign-in Modal */}
@@ -221,12 +167,10 @@ export default function Page() {
               <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
             </button>
             <div className="mb-3">{workflows.find((w) => w.key === comingSoonWorkflow)?.icon}</div>
-            {workflows.find((w) => w.key === comingSoonWorkflow)?.soonContent ?? (
-              <>
-                <h2 className="text-2xl font-bold text-white mb-2">Coming Soon</h2>
-                <p className="text-slate-300 text-center mb-4">This workflow is in development. Check back soon!</p>
-              </>
-            )}
+            <>
+              <h2 className="text-2xl font-bold text-white mb-2">Coming Soon</h2>
+              <p className="text-slate-300 text-center mb-4">This workflow is in development. Check back soon!</p>
+            </>
             <button
               className="mt-2 px-4 py-1 bg-transparent text-slate-400 hover:text-white hover:underline text-sm transition-all duration-200"
               onClick={closeModal}

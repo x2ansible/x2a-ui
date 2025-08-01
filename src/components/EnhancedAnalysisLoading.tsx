@@ -2,22 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle } from 'lucide-react';
 
 // TypeScript interfaces
-interface AnalysisLoadingStateProps {
-  technologyType?: string;
-  analysisType?: string;
-  onComplete?: () => void;
-}
-
-interface EnhancedAnalysisLoadingProps {
+interface AnalysisLoadingProps {
   technologyType: string;
   onComplete?: () => void;
 }
 
-// Enhanced Analysis Loading Component
-const AnalysisLoadingState: React.FC<AnalysisLoadingStateProps> = ({ 
-  technologyType = 'chef', 
-  onComplete 
-}) => {
+// Analysis Loading Component
+const AnalysisLoading: React.FC<AnalysisLoadingProps> = ({ technologyType, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [pulseIntensity, setPulseIntensity] = useState(1);
@@ -108,241 +99,67 @@ const AnalysisLoadingState: React.FC<AnalysisLoadingStateProps> = ({
   }, [config.steps.length, onComplete]);
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-black min-h-[400px] relative overflow-hidden">
-      
-      {/* Animated Background Particles */}
-      <div className="absolute inset-0">
-        {[...Array(12)].map((_, i) => (
+    <div className="flex flex-col items-center justify-center min-h-[400px] p-8 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl border border-slate-700/50 backdrop-blur-sm">
+      {/* Header with technology branding */}
+      <div className="text-center mb-8">
+        <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r ${config.color} ${config.bgGlow} mb-4 transform transition-transform duration-300`} style={{transform: `scale(${pulseIntensity})`}}>
+          <span className="text-2xl">{config.icon}</span>
+        </div>
+        <h2 className="text-2xl font-bold text-slate-100 mb-2">
+          Analyzing {technologyType.charAt(0).toUpperCase() + technologyType.slice(1)} Code
+        </h2>
+        <p className="text-slate-400 text-sm">
+          Processing and analyzing your configuration files...
+        </p>
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full max-w-md mb-8">
+        <div className="flex justify-between text-xs text-slate-400 mb-2">
+          <span>Progress</span>
+          <span>{Math.round(progress)}%</span>
+        </div>
+        <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+          <div 
+            className={`h-full bg-gradient-to-r ${config.color} transition-all duration-300 ease-out`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Current step indicator */}
+      <div className="w-full max-w-md">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className={`w-8 h-8 rounded-full bg-gradient-to-r ${config.color} flex items-center justify-center text-white text-sm font-bold`}>
+            {currentStep + 1}
+          </div>
+          <div className="flex-1">
+            <div className="text-slate-200 font-medium">
+              {config.steps[currentStep] || 'Complete'}
+            </div>
+            <div className="text-xs text-slate-400">
+              Step {currentStep + 1} of {config.steps.length}
+            </div>
+          </div>
+          {currentStep >= config.steps.length - 1 && (
+            <CheckCircle className="w-6 h-6 text-green-400" />
+          )}
+        </div>
+      </div>
+
+      {/* Animated dots */}
+      <div className="flex space-x-2 mt-6">
+        {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className={`absolute w-1 h-1 bg-gradient-to-r ${config.color} rounded-full opacity-60`}
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animation: `float ${3 + Math.random() * 4}s ease-in-out infinite`,
-              animationDelay: `${Math.random() * 2}s`
-            }}
+            className={`w-2 h-2 rounded-full bg-gradient-to-r ${config.color} animate-pulse`}
+            style={{ animationDelay: `${i * 0.2}s` }}
           />
         ))}
       </div>
-
-      {/* Main Content Container */}
-      <div className="relative z-10 text-center max-w-md mx-auto px-6">
-        
-        {/* Technology Icon with Glow */}
-        <div className="relative mb-8">
-          <div 
-            className={`inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r ${config.color} ${config.bgGlow} shadow-2xl transition-transform duration-1000`}
-            style={{ transform: `scale(${pulseIntensity})` }}
-          >
-            <span className="text-3xl filter drop-shadow-lg">{config.icon}</span>
-          </div>
-          
-          {/* Rotating Ring */}
-          <div className="absolute inset-0 rounded-full border-2 border-dashed border-gray-400 animate-spin" style={{ animationDuration: '3s' }}></div>
-          <div className="absolute inset-2 rounded-full border border-gray-500 animate-ping"></div>
-        </div>
-
-        {/* Main Title */}
-        <h2 className="text-2xl font-bold text-white mb-2 capitalize">
-          Analyzing {technologyType.replace('-', ' ')} Code
-        </h2>
-        
-        {/* Subtitle */}
-        <p className="text-gray-400 mb-8 text-sm">
-          Deep code analysis in progress...
-        </p>
-
-        {/* Progress Bar */}
-        <div className="w-full bg-gray-800 rounded-full h-3 mb-6 overflow-hidden">
-          <div 
-            className={`h-full bg-gradient-to-r ${config.color} rounded-full transition-all duration-500 ease-out relative`}
-            style={{ width: `${progress}%` }}
-          >
-            <div className="absolute inset-0 bg-white opacity-30 animate-pulse"></div>
-          </div>
-        </div>
-
-        {/* Current Step Display */}
-        <div className="space-y-3 mb-6">
-          {config.steps.map((step, index) => (
-            <div 
-              key={index}
-              className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-500 ${
-                index === currentStep 
-                  ? `bg-gradient-to-r ${config.color} bg-opacity-20 border border-opacity-50 border-current scale-105` 
-                  : index < currentStep
-                  ? 'bg-green-900/30 border border-green-500/30'
-                  : 'bg-gray-800/50 border border-gray-700/50'
-              }`}
-            >
-              <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 ${
-                index < currentStep 
-                  ? 'bg-green-500 text-white'
-                  : index === currentStep
-                  ? `bg-gradient-to-r ${config.color} text-white animate-pulse`
-                  : 'bg-gray-600 text-gray-400'
-              }`}>
-                {index < currentStep ? (
-                  <CheckCircle size={14} />
-                ) : index === currentStep ? (
-                  <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
-                ) : (
-                  <span className="text-xs font-bold">{index + 1}</span>
-                )}
-              </div>
-              
-              <span className={`text-sm font-medium transition-colors duration-300 ${
-                index === currentStep 
-                  ? 'text-white' 
-                  : index < currentStep 
-                  ? 'text-green-300'
-                  : 'text-gray-400'
-              }`}>
-                {step}
-              </span>
-
-              {/* Animated dots for current step */}
-              {index === currentStep && (
-                <div className="flex gap-1 ml-auto">
-                  {[...Array(3)].map((_, i) => (
-                    <div 
-                      key={i}
-                      className="w-1 h-1 bg-white rounded-full animate-bounce"
-                      style={{ animationDelay: `${i * 0.2}s` }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Stats Display */}
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-            <div className="text-blue-400 font-bold text-lg">{Math.round(progress)}%</div>
-            <div className="text-xs text-gray-500">Complete</div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-            <div className="text-green-400 font-bold text-lg">{currentStep + 1}</div>
-            <div className="text-xs text-gray-500">of {config.steps.length}</div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
-            <div className="text-purple-400 font-bold text-lg">
-              {technologyType === 'ansible-upgrade' ? 'UPG' : 
-               technologyType === 'shell' ? 'SH' :
-               technologyType.slice(0, 3).toUpperCase()}
-            </div>
-            <div className="text-xs text-gray-500">Engine</div>
-          </div>
-        </div>
-      </div>
-
-      {/* CSS Animation Styles */}
-      <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.6; }
-          25% { transform: translateY(-10px) rotate(90deg); opacity: 1; }
-          50% { transform: translateY(-20px) rotate(180deg); opacity: 0.8; }
-          75% { transform: translateY(-10px) rotate(270deg); opacity: 1; }
-        }
-        
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
-        }
-        
-        .shimmer {
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-          background-size: 200% 100%;
-          animation: shimmer 2s infinite;
-        }
-      `}</style>
     </div>
   );
 };
 
-// Main component for your AnalysisPanel.tsx
-export const EnhancedAnalysisLoading: React.FC<EnhancedAnalysisLoadingProps> = ({ technologyType, onComplete }) => {
-  return (
-    <AnalysisLoadingState 
-      technologyType={technologyType}
-      analysisType="analysis"
-      onComplete={onComplete}
-    />
-  );
-};
-
-// Demo Component (remove this in production)
-const LoadingDemo = () => {
-  const [currentDemo, setCurrentDemo] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const demos = [
-    { tech: 'chef', name: 'Chef' },
-    { tech: 'ansible', name: 'Ansible' },
-    { tech: 'ansible-upgrade', name: 'Upgrade' },
-    { tech: 'puppet', name: 'Puppet' },
-    { tech: 'salt', name: 'Salt' },
-    { tech: 'shell', name: 'Shell' },
-    { tech: 'bladelogic', name: 'BladeLogic' },
-    { tech: 'terraform', name: 'Terraform' }
-  ];
-
-  const handleComplete = () => {
-    setIsLoading(false);
-    setTimeout(() => {
-      setCurrentDemo((prev) => (prev + 1) % demos.length);
-      setIsLoading(true);
-    }, 2000);
-  };
-
-  useEffect(() => {
-    setIsLoading(true);
-  }, [currentDemo]);
-
-  return (
-    <div className="w-full h-screen bg-black">
-      {/* Demo Controls */}
-      <div className="absolute top-4 left-4 z-20 flex gap-2 flex-wrap">
-        {demos.map((demo, index) => (
-          <button
-            key={demo.tech}
-            onClick={() => {
-              setCurrentDemo(index);
-              setIsLoading(true);
-            }}
-            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-              index === currentDemo 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            {demo.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Loading Animation */}
-      {isLoading ? (
-        <AnalysisLoadingState 
-          technologyType={demos[currentDemo].tech}
-          onComplete={handleComplete}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-black">
-          <div className="text-center">
-            <CheckCircle size={64} className="text-green-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">Analysis Complete!</h2>
-            <p className="text-gray-400">
-              {demos[currentDemo].name} analysis finished successfully
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default LoadingDemo;
+// Export the main component
+export { AnalysisLoading };

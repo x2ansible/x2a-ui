@@ -22,7 +22,7 @@ import {
 
 import { AnalysisOverviewTab } from './tabs/AnalysisOverviewTab';
 import { TechnicalDetailsTab } from './tabs/TechnicalDetailsTab';
-import { EnhancedAnalysisLoading } from '../EnhancedAnalysisLoading';
+import { AnalysisLoading } from '../EnhancedAnalysisLoading';
 
 // SAFE: Sanitize result object to prevent React rendering errors
 const sanitizeResult = (result: BackendAnalysisResponse): BackendAnalysisResponse => {
@@ -70,7 +70,7 @@ const AnalysisPanel: React.FC<ClassificationPanelProps> = ({
   // Handle loading state with enhanced animation
   if (loading) {
     return (
-      <EnhancedAnalysisLoading 
+      <AnalysisLoading 
         technologyType={getTechnologyType()}
       />
     );

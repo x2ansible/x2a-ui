@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export async function POST(request: NextRequest) {
-  console.log("🚨 USING ENHANCED ROUTE HANDLER - VERSION 2 🚨");
+  console.log("🚨 USING ROUTE HANDLER - VERSION 2 🚨");
   
   try {
     const body = await request.json();

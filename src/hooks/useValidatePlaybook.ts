@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 
-// --- Enhanced Types for Rich Streaming ---
+// --- Types for Rich Streaming ---
 interface ValidationStep {
   step: number;
   agent_action: 'lint' | 'llm_fix';
@@ -24,7 +24,7 @@ interface StreamingProgress {
   };
 }
 
-interface EnhancedValidationResult {
+interface ValidationResult {
   passed: boolean;
   final_code: string;
   original_code: string;
@@ -54,7 +54,7 @@ interface ValidationRequest {
 }
 
 interface ValidationState {
-  validationResult: EnhancedValidationResult | null;
+  validationResult: ValidationResult | null;
   isValidating: boolean;
   validationError: string | null;
   progress: string | null;
@@ -63,7 +63,7 @@ interface ValidationState {
   streamingActive: boolean;
 }
 
-// --- Enhanced Hook ---
+// --- Hook ---
 export const useValidatePlaybook = () => {
   const [state, setState] = useState<ValidationState>({
     validationResult: null,
@@ -147,12 +147,12 @@ export const useValidatePlaybook = () => {
         // Handle direct JSON response
         if (contentType?.includes("application/json")) {
           updateState({ progress: "Processing validation results..." });
-          const result = await response.json();
+          const jsonResult = await response.json();
           // console.log("[useValidatePlaybook] Received direct JSON response");
           
-          const enhancedResult = createEnhancedResult(result, cleanedPlaybook, []);
+          const result = createResult(jsonResult, cleanedPlaybook, []);
           updateState({
-            validationResult: enhancedResult,
+            validationResult: result,
             progress: null,
             isValidating: false,
             streamingActive: false,
@@ -243,10 +243,10 @@ export const useValidatePlaybook = () => {
                   // console.log("[useValidatePlaybook] Received single validation result");
                   
                   const singleResult = data.data;
-                  const enhancedResult = createEnhancedResultFromSingleResult(singleResult, cleanedPlaybook);
+                  const result = createResultFromSingleResult(singleResult, cleanedPlaybook);
                   
                   updateState({
-                    validationResult: enhancedResult,
+                    validationResult: result,
                     progress: null,
                     isValidating: false,
                     streamingActive: false,
@@ -265,10 +265,10 @@ export const useValidatePlaybook = () => {
                   // console.log("[useValidatePlaybook] Received final result");
                   
                   const finalData = data.data;
-                  const enhancedResult = createEnhancedResult(finalData, cleanedPlaybook, collectedSteps);
+                  const result = createResult(finalData, cleanedPlaybook, collectedSteps);
                   
                   updateState({
-                    validationResult: enhancedResult,
+                    validationResult: result,
                     progress: null,
                     isValidating: false,
                     streamingActive: false,
@@ -306,9 +306,9 @@ export const useValidatePlaybook = () => {
             steps: collectedSteps,
           };
           
-          const enhancedResult = createEnhancedResult(mockResult, cleanedPlaybook, collectedSteps);
+          const result = createResult(mockResult, cleanedPlaybook, collectedSteps);
           updateState({
-            validationResult: enhancedResult,
+            validationResult: result,
             progress: null,
             isValidating: false,
             streamingActive: false,
@@ -404,43 +404,57 @@ export const useValidatePlaybook = () => {
   };
 };
 
-// Helper function to create enhanced result from single-result format
-function createEnhancedResultFromSingleResult(
+// Helper function to create result from single-result format
+function createResultFromSingleResult(
   singleResult: unknown, 
   originalCode: string
-): EnhancedValidationResult {
+): ValidationResult {
   const result = singleResult as Record<string, unknown>;
-  const issues = (result.issues as Array<{
-    rule: string;
-    description: string;
-    line: number;
-    severity: string;
-  }>) || [];
+  
+  // Handle the actual backend response format
+  const passed = (result.passed as boolean) || false;
+  const summary = (result.summary as string) || '';
+  const issues = (result.issues as string[]) || [];
+  const issuesCount = (result.issues_count as number) || 0;
+  const agentSteps = (result.agent_steps as string[]) || [];
+  const agentId = (result.agent_id as string) || '';
+  const elapsedTime = (result.elapsed_time as number) || 0;
   
   // Convert each lint issue to a step for UI consistency
   const steps: ValidationStep[] = issues.map((issue, index) => ({
     step: index + 1,
     agent_action: 'lint' as const,
-    summary: `${issue.rule}: ${issue.description}`,
+    summary: issue,
     code: originalCode,
-    message: `Line ${issue.line}: ${issue.description}`,
+    message: issue,
     timestamp: Date.now(),
   }));
   
+  // Add agent steps if available
+  agentSteps.forEach((step, index) => {
+    steps.push({
+      step: steps.length + 1,
+      agent_action: 'lint' as const,
+      summary: step,
+      code: originalCode,
+      message: step,
+      timestamp: Date.now(),
+    });
+  });
+  
   // Add a summary step if there are issues or if validation failed
-  if (issues.length > 0 || !(result.validation_passed as boolean)) {
-    const summary = result.summary as { total_issues: number; violations: number; warnings: number };
+  if (issues.length > 0 || !passed) {
     steps.push({
       step: steps.length + 1,
       agent_action: 'lint' as const,
       summary: issues.length > 0 
-        ? `Found ${summary.total_issues} issues (${summary.violations} violations, ${summary.warnings} warnings)`
-        : (result.message as string) || 'Validation completed with issues',
+        ? `Found ${issuesCount} issues`
+        : 'Validation completed with issues',
       code: originalCode,
-      message: result.message as string,
+      message: summary,
       timestamp: Date.now(),
     });
-  } else if (result.validation_passed as boolean) {
+  } else if (passed) {
     // Add a success step if validation passed with no issues
     steps.push({
       step: steps.length + 1,
@@ -452,14 +466,8 @@ function createEnhancedResultFromSingleResult(
     });
   }
   
-  // Safely handle raw_output which might be undefined or missing properties
-  const rawOutput = result.raw_output as { stdout?: string; stderr?: string } || {};
-  const stdout = rawOutput.stdout || '';
-  const stderr = rawOutput.stderr || '';
-  const rawOutputText = stdout + (stderr ? '\n' + stderr : '');
-  
   return {
-    passed: (result.validation_passed as boolean) || false,
+    passed: passed,
     final_code: originalCode, // No auto-fixing in new format
     original_code: originalCode,
     steps: steps,
@@ -467,36 +475,42 @@ function createEnhancedResultFromSingleResult(
     summary: {
       fixes_applied: 0, // No auto-fixing in new format
       lint_iterations: 1,
-      final_status: (result.validation_passed as boolean) ? 'passed' : 'failed',
+      final_status: passed ? 'passed' : 'failed',
     },
     // Legacy compatibility
     issues: steps,
-    raw_output: rawOutputText,
+    raw_output: summary,
     debug_info: {
-      status: (result.validation_passed as boolean) ? "passed" : "failed",
+      status: passed ? "passed" : "failed",
       playbook_length: originalCode.length,
       steps_completed: steps.length,
       lint_iterations: 1,
       fixes_applied: 0,
-      exit_code: result.exit_code as number,
-      profile: result.profile as string,
+      issues_count: issuesCount,
+      agent_id: agentId,
+      elapsed_time: elapsedTime,
     },
-    error_message: (result.validation_passed as boolean) ? undefined : (result.message as string),
+    error_message: passed ? undefined : summary,
   };
 }
 
-// Helper function to create enhanced result
-function createEnhancedResult(
+// Helper function to create result
+function createResult(
   data: unknown, 
   originalCode: string, 
   streamSteps: ValidationStep[]
-): EnhancedValidationResult {
+): ValidationResult {
   const typedData = data as Record<string, unknown>;
   const steps = (typedData.steps as ValidationStep[]) || streamSteps || [];
   const finalCode = (typedData.final_code as string) || originalCode;
   
   const lintSteps = steps.filter((s: ValidationStep) => s.agent_action === 'lint');
   const fixSteps = steps.filter((s: ValidationStep) => s.agent_action === 'llm_fix');
+  
+  // Get issues count from backend response or calculate from steps
+  const issuesCount = (typedData.issues_count as number) || 
+                     (typedData.issues as any[])?.length || 
+                     lintSteps.length;
   
   return {
     passed: (typedData.passed as boolean) || false,
@@ -518,6 +532,9 @@ function createEnhancedResult(
       steps_completed: steps.length,
       lint_iterations: lintSteps.length,
       fixes_applied: fixSteps.length,
+      issues_count: issuesCount,
+      agent_id: typedData.agent_id as string,
+      elapsed_time: typedData.elapsed_time as number,
     },
     error_message: (typedData.passed as boolean) ? undefined : "Validation completed with issues",
   };
