@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
         "Accept": "text/event-stream",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(600000), // 10 minute timeout
     });
 
     console.log(`📥 Backend response status: ${response.status}`);
