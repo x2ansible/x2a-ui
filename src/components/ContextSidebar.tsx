@@ -50,7 +50,7 @@ export default function ContextSidebar({
       setLoading(true);
       setError(null);
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_VECTOR_DB_LIST_API || "/api/vector-db/list";
+        const apiUrl = process.env.NEXT_PUBLIC_VECTOR_DB_LIST_API || "/api/vector-dbs";
         console.log("🔗 Fetching vector DBs from:", apiUrl);
         
         const response = await fetch(apiUrl);
