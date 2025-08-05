@@ -7,7 +7,7 @@ export async function GET() {
   console.log("Backend URL:", BACKEND_URL);
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/vector-dbs`, {
+    const response = await fetch(`${BACKEND_URL}/api/vector-db/list`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
